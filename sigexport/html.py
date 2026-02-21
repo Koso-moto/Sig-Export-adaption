@@ -36,6 +36,7 @@ def create_html(
     last_page = int(len(messages) / msgs_per_page)
 
     page_num = 0
+    last_date = None
     for i, msg in enumerate(messages):
         if i % msgs_per_page == 0:
             nav = "\n"
@@ -60,6 +61,11 @@ def create_html(
         sender = msg.sender
         date = msg.date.date().isoformat()
         time = msg.date.time().replace(microsecond=0).isoformat()
+
+        # Insert a day-divider whenever the date changes
+        if date != last_date:
+            ht_content += "<div class='day-divider'>" + date + "</div>\n"
+            last_date = date
 
         reactions = " ".join(f"{r.name}: {r.emoji}" for r in msg.reactions)
         quote = ""
