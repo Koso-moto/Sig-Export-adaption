@@ -173,10 +173,12 @@ div {
 /* ── Images & video ── */
 figure > label > img, video {
     display: block;
-    width: 420px;
-    max-width: 420px;
+    width: auto;
+    max-width: 360px;
+    max-height: 300px;
     border-radius: 8px;
     margin-top: 3px;
+    object-fit: contain;
 }
 
 label > img {

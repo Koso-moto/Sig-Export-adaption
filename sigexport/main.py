@@ -5,9 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from typer import Argument, Context, Exit, Option, Typer, colors, secho
+from typer import Argument, Context, Exit, Option, Typer, colors, run, secho
 
-app = Typer()
+app = Typer(help="sigexport — export Signal chats to markdown, HTML and PDF.\n\nTo export from Signal database, run:\n\n    sigexport ~/outputdir\n\nFor full export options run:\n\n    sigexport main --help")
 
 from sigexport import create, data, files, html, logging, merge, utils
 from sigexport.export_channel_metadata import export_channel_metadata
@@ -174,7 +174,7 @@ def main(
         (dest / name).mkdir(parents=True, exist_ok=True)
         md_path = dest / name / "chat.md"
         js_path = dest / name / "data.json"
-        ht_path = dest / name / "index.html"
+        ht_path = dest / name / f"{name}.html"
 
         md_f = md_path.open("a", encoding="utf-8")
         js_f = None
@@ -200,6 +200,8 @@ def main(
                 js_f.close()
             if ht_f:
                 ht_f.close()
+        if html_output:
+            html.prep_media_pdf(dest / name)
 
     secho("Done!", fg=colors.GREEN)
 
@@ -226,26 +228,37 @@ def parse_input_dt(dt_string: str) -> datetime:
 @app.command(name="regenerate-html")
 def regenerate_html(
     chats_dir: Path = Argument(..., help="Path to your signal-chats export directory"),
+    chat: str = Option("", "--chat", "-c", help="Name of a single chat folder to regenerate (leave empty for all)"),
     paginate: int = Option(100, "--paginate", "-p", help="Messages per page in HTML; set to 0 for infinite"),
     verbose: bool = Option(False, "--verbose", "-v"),
 ) -> None:
-    """Regenerate index.html files from existing data.json files without re-exporting from Signal."""
+    """Regenerate {name}.html files from existing data.json files without re-exporting from Signal."""
     import json
     from datetime import datetime as dt
 
     logging.verbose = verbose
     chats_dir = chats_dir.expanduser().resolve()
-    secho(f"Scanning: {chats_dir}")
 
     if paginate <= 0:
         paginate = int(1e20)
 
+    if chat:
+        chat_path = chats_dir / chat
+        if not chat_path.is_dir():
+            secho(f"Error: Chat folder '{chat}' not found in {chats_dir}", fg=colors.RED)
+            raise Exit(code=1)
+        data_jsons = [chat_path / "data.json"]
+        secho(f"Regenerating HTML for: {chat}")
+    else:
+        data_jsons = sorted(chats_dir.rglob("data.json"))
+        secho(f"Scanning: {chats_dir}")
+
     found = 0
     errors = 0
-    for data_json in sorted(chats_dir.rglob("data.json")):
+    for data_json in data_jsons:
         chat_dir = data_json.parent
         chat_name = chat_dir.name
-        index_html = chat_dir / "index.html"
+        index_html = chat_dir / f"{chat_name}.html"
 
         secho(f"  Regenerating: {chat_name}... ", nl=False)
         try:
@@ -264,7 +277,7 @@ def regenerate_html(
                             raw_path = att.get("path", "")
                             attachments.append(_models.Attachment(
                                 name=str(att.get("name", "")),
-                                path=Path(str(raw_path)) if raw_path else None,
+                                path=Path(str(raw_path)) if raw_path else Path(""),
                             ))
                         elif att:
                             attachments.append(_models.Attachment(
@@ -297,6 +310,7 @@ def regenerate_html(
             ht = html.create_html(name=chat_name, messages=messages, msgs_per_page=paginate)
             index_html.write_text(ht, encoding="utf-8")
             html.prep_html(chat_dir)
+            html.prep_media_pdf(chat_dir)
             secho(f"done ({len(messages)} messages)", fg=colors.GREEN)
             found += 1
 
@@ -310,6 +324,267 @@ def regenerate_html(
     secho(f"\nDone! Regenerated {found} chat(s), {errors} error(s).", fg=colors.GREEN)
 
 
+@app.command(name="pdf")
+def generate_pdf(
+    chats_dir: Path = Argument(..., help="Path to your signal-chats export directory"),
+    chat: str = Option("", "--chat", "-c", help="Name of a single chat folder to generate PDF for (leave empty for all)"),
+    output_name: str = Option("report.pdf", "--output", "-o", help="Name of the PDF file to generate in each chat folder"),
+    no_images: bool = Option(False, "--no-images", help="Skip images when generating PDF (useful for large image-heavy chats)"),
+    verbose: bool = Option(False, "--verbose", "-v"),
+) -> None:
+    """Generate a PDF report.pdf in each chat folder using headless Chrome."""
+    import subprocess
+    import shutil
+
+    # Detect Chrome binary across macOS, Linux, Windows
+    chrome_candidates = [
+        # macOS
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        # Linux
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        # Windows
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    ]
+
+    chrome_bin = None
+    for candidate in chrome_candidates:
+        # For full paths, check if file exists
+        if "/" in candidate or "\\" in candidate:
+            if Path(candidate).exists():
+                chrome_bin = candidate
+                break
+        else:
+            # For bare command names, check if on PATH
+            if shutil.which(candidate):
+                chrome_bin = shutil.which(candidate)
+                break
+
+    if not chrome_bin:
+        secho(
+            "Error: Could not find Chrome or Chromium. Please install Google Chrome "
+            "or Chromium, or make sure it is on your PATH.",
+            fg=colors.RED,
+        )
+        raise Exit(code=1)
+
+    secho(f"Using Chrome at: {chrome_bin}")
+
+    chats_dir = chats_dir.expanduser().resolve()
+
+    # Single chat or all chats
+    if chat:
+        chat_path = chats_dir / chat
+        if not chat_path.is_dir():
+            secho(f"Error: Chat folder '{chat}' not found in {chats_dir}", fg=colors.RED)
+            raise Exit(code=1)
+        index_htmls = [chat_path / f"{chat}.html"]
+        secho(f"Generating PDF for: {chat}")
+    else:
+        index_htmls = sorted(
+            f for f in chats_dir.rglob("*.html")
+            if f.stem == f.parent.name  # only {name}.html files
+        )
+        secho(f"Scanning: {chats_dir}")
+
+    found = 0
+    errors = 0
+    from sigexport.html import create_html, prep_html
+    from sigexport import models as _models
+    import json
+    from datetime import datetime as dt
+
+    def chrome_to_pdf(html_path: Path, pdf_path: Path) -> tuple[bool, str]:
+        """Run headless Chrome to convert one HTML file to PDF.
+        Uses pre-generated media_pdf/ folder with resized images.
+        """
+        import shutil as _shutil
+
+        chat_dir = html_path.parent
+        media_dir = chat_dir / "media"
+        media_pdf_dir = chat_dir / "media_pdf"
+        tmp_html = chat_dir / (html_path.stem + "_tmp.html")
+        image_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".avif"}
+
+        try:
+            html_text = html_path.read_text(encoding="utf-8")
+
+            if media_pdf_dir.exists():
+                # Replace ./media/ references with media_pdf/ path
+                html_text = html_text.replace(
+                    '"./media/', f'"{media_pdf_dir.as_posix()}/'
+                ).replace(
+                    "'./media/", f"'{media_pdf_dir.as_posix()}/"
+                )
+                # Rewrite image extensions to .jpg since prep_media_pdf saves everything as JPEG
+                for ext in image_exts - {".jpg"}:
+                    html_text = html_text.replace(
+                        ext + '"', '.jpg"'
+                    ).replace(
+                        ext + "'", ".jpg'"
+                    )
+            elif media_dir.exists():
+                secho(f"\n    media_pdf/ not found, run regenerate-html first for best results", fg=colors.YELLOW)
+
+            tmp_html.write_text(html_text, encoding="utf-8")
+            result = subprocess.run(
+                [
+                    chrome_bin,
+                    "--headless",
+                    "--disable-gpu",
+                    "--no-pdf-header-footer",
+                    f"--print-to-pdf={pdf_path}",
+                    tmp_html.as_uri(),
+                ],
+                capture_output=True,
+                timeout=1200,
+            )
+            if result.returncode == 0:
+                return True, str(pdf_path)
+            else:
+                return False, f"exit code {result.returncode}"
+        except subprocess.TimeoutExpired:
+            return False, "timed out"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            tmp_html.unlink(missing_ok=True)
+
+
+    def merge_pdfs(pdf_paths: list[Path], output_path: Path) -> None:
+        """Merge multiple PDFs into one using pypdf."""
+        from pypdf import PdfWriter
+        writer = PdfWriter()
+        for pdf_path in sorted(pdf_paths):
+            writer.append(str(pdf_path))
+        with open(output_path, "wb") as f:
+            writer.write(f)
+
+    def generate_one(index_html: Path) -> tuple[str, bool, str]:
+        chat_dir = index_html.parent
+        chat_name = chat_dir.name
+        final_pdf = chat_dir / (f"{chat_name}.pdf" if not output_name or output_name == "report.pdf" else output_name)
+        data_json = chat_dir / "data.json"
+
+        # Load messages to check size and split by year
+        messages_by_year: dict[int, list] = {}
+        if data_json.exists():
+            with open(data_json, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    d = json.loads(line)
+                    attachments = []
+                    for att in d.get("attachments", []):
+                        if isinstance(att, dict):
+                            raw_path = att.get("path", "")
+                            attachments.append(_models.Attachment(
+                                name=str(att.get("name", "")),
+                                path=Path(str(raw_path)) if raw_path else Path(""),
+                            ))
+                    reactions = []
+                    for r in d.get("reactions", []):
+                        if isinstance(r, dict):
+                            reactions.append(_models.Reaction(
+                                name=r.get("name", ""),
+                                emoji=r.get("emoji", ""),
+                            ))
+                    msg = _models.Message(
+                        date=dt.fromisoformat(d["date"]),
+                        sender=d.get("sender", ""),
+                        body=d.get("body", "") or "",
+                        quote=d.get("quote", "") or "",
+                        sticker=d.get("sticker", "") or "",
+                        reactions=reactions,
+                        attachments=attachments,
+                    )
+                    year = msg.date.year
+                    messages_by_year.setdefault(year, []).append(msg)
+
+        total_messages = sum(len(v) for v in messages_by_year.values())
+
+        # If small enough, just use the existing HTML directly
+        if total_messages <= 5000 or not messages_by_year:
+            if no_images:
+                # Inject CSS to hide images before printing
+                html_text = index_html.read_text(encoding="utf-8")
+                html_text = html_text.replace("</head>", "<style>figure, video, audio { display: none !important; }</style></head>")
+                tmp_html = index_html.parent / f"{index_html.stem}_noimg_tmp.html"
+                tmp_html.write_text(html_text, encoding="utf-8")
+                success, detail = chrome_to_pdf(tmp_html, final_pdf)
+                tmp_html.unlink(missing_ok=True)
+            else:
+                success, detail = chrome_to_pdf(index_html, final_pdf)
+            return chat_name, success, detail
+
+        # Large chat: split into chunks of max 2000 messages, generate one PDF per chunk, merge
+        CHUNK_SIZE = 1000
+        all_messages = [m for msgs in sorted(messages_by_year.items()) for m in msgs[1]]
+        chunks = [all_messages[i:i+CHUNK_SIZE] for i in range(0, len(all_messages), CHUNK_SIZE)]
+
+        chunk_pdfs = []
+        temp_htmls = []
+        try:
+            for idx, chunk in enumerate(chunks):
+                chunk_html_path = chat_dir / f"{chat_name}_chunk{idx:03d}_tmp.html"
+                chunk_pdf_path = chat_dir / f"{chat_name}_chunk{idx:03d}_tmp.pdf"
+                temp_htmls.append(chunk_html_path)
+                chunk_pdfs.append(chunk_pdf_path)
+
+                start = chunk[0].date.strftime("%Y-%m")
+                end = chunk[-1].date.strftime("%Y-%m")
+                label = start if start == end else f"{start} to {end}"
+
+                ht = create_html(
+                    name=f"{chat_name} ({label})",
+                    messages=chunk,
+                    msgs_per_page=int(1e20),
+                )
+                if no_images:
+                    ht = ht.replace("</head>", "<style>figure, video, audio { display: none !important; }</style></head>")
+                chunk_html_path.write_text(ht, encoding="utf-8")
+
+                success, detail = chrome_to_pdf(chunk_html_path, chunk_pdf_path)
+                if not success:
+                    return chat_name, False, f"chunk {idx+1}/{len(chunks)} ({label}): {detail}"
+
+            # Merge all chunk PDFs into final PDF
+            merge_pdfs(chunk_pdfs, final_pdf)
+            return chat_name, True, str(final_pdf)
+
+        finally:
+            # Clean up temporary files
+            for f in temp_htmls + chunk_pdfs:
+                if f.exists():
+                    f.unlink()
+
+    for index_html in index_htmls:
+        chat_name = index_html.parent.name
+        secho(f"  Generating: {chat_name}... ", nl=False)
+        chat_name, success, detail = generate_one(index_html)
+        if success:
+            secho(f"✓ → {detail}", fg=colors.GREEN)
+            found += 1
+        else:
+            secho(f"✗ ERROR ({detail})", fg=colors.RED)
+            errors += 1
+
+    secho(f"\nDone! Generated {found} PDF(s), {errors} error(s).", fg=colors.GREEN)
+
+
 def cli() -> None:
     """cli."""
-    app()
+    import sys
+    # If first argument looks like a path or is a known main flag, invoke main directly
+    known_subcommands = {"regenerate-html", "pdf", "--help", "--install-completion", "--show-completion"}
+    args = sys.argv[1:]
+    if args and args[0] not in known_subcommands:
+        # Looks like a legacy call to main (e.g. sigexport ~/outputdir)
+        run(main)
+    else:
+        app()

@@ -12,10 +12,18 @@ from sigexport.logging import log
 
 
 def prep_html(dest: Path) -> None:
-    """Prepare CSS etc"""
+    """Copy style.css to the root export directory.
+    dest can be either the root export dir (main export) or a chat subfolder (regenerate-html).
+    We always copy to the root export dir so all chats share one style.css via ../style.css.
+    """
     root = Path(__file__).resolve().parents[0]
     css_source = root / "style.css"
-    css_dest = dest / "style.css"
+    # If dest contains data.json it's a chat folder, so go up one level
+    # Otherwise dest is already the root export directory
+    if (dest / "data.json").exists():
+        css_dest = dest.parent / "style.css"
+    else:
+        css_dest = dest / "style.css"
     if os.path.isfile(css_source):
         shutil.copy2(css_source, css_dest)
     else:
@@ -23,6 +31,47 @@ def prep_html(dest: Path) -> None:
             f"Stylesheet ({css_source}) not found."
             f"You might want to install one manually at {css_dest}."
         )
+
+
+def prep_media_pdf(chat_dir: Path, max_width: int = 600) -> None:
+    """Pre-generate a media_pdf/ folder with resized images for fast PDF export.
+    Videos and audio are skipped as they cannot appear in PDFs.
+    """
+    media_dir = chat_dir / "media"
+    if not media_dir.exists():
+        return
+
+    try:
+        from PIL import Image as PilImage
+    except ImportError:
+        secho("Pillow not installed, skipping media_pdf generation. Install with: pip install Pillow")
+        return
+
+    image_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".avif"}
+    media_pdf_dir = chat_dir / "media_pdf"
+    media_pdf_dir.mkdir(exist_ok=True)
+
+    for img_path in media_dir.iterdir():
+        if img_path.suffix.lower() not in image_exts:
+            continue
+        dest = media_pdf_dir / (img_path.stem + ".jpg")
+        if dest.exists():
+            continue  # skip if already generated
+        try:
+            with PilImage.open(img_path) as img:
+                # Apply EXIF orientation before resizing so rotation is baked in
+                try:
+                    from PIL import ImageOps
+                    img = ImageOps.exif_transpose(img)
+                except Exception:
+                    pass
+                if img.width > max_width:
+                    ratio = max_width / img.width
+                    new_size = (max_width, int(img.height * ratio))
+                    img = img.resize(new_size, PilImage.LANCZOS)
+                img.convert("RGB").save(dest, "JPEG", quality=85)
+        except Exception:
+            shutil.copy2(img_path, dest)
 
 
 def create_cover_page(name: str, messages: list[models.Message]) -> str:
