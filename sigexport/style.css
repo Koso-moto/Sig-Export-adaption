@@ -207,29 +207,6 @@ label > img {
 }
 
 @media print {
-    .chat-title {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        text-align: center;
-        font-size: 1em;
-        font-weight: 600;
-        padding: 4mm 14mm 3mm 14mm;
-        border-bottom: 1px solid #1b1b1b;
-        background: #ffffff;
-        z-index: 1000;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-    }
-
-    /* Push page content down so it clears the fixed title */
-    .page {
-        margin-top: 12mm;
-    }
-}
-
-@media print {
 
     @page {
         size: A4 portrait;

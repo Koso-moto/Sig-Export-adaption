@@ -32,7 +32,7 @@ def create_html(
 
     log(f"\tDoing html for {name}")
     # touch first
-    ht_content = ""
+    ht_content = "<div class=\"chat-title\">" + name + "</div>\n"
     last_page = int(len(messages) / msgs_per_page)
 
     page_num = 0
