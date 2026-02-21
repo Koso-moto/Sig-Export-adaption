@@ -5,7 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from typer import Argument, Context, Exit, Option, colors, run, secho
+from typer import Argument, Context, Exit, Option, Typer, colors, secho
+
+app = Typer()
 
 from sigexport import create, data, files, html, logging, merge, utils
 from sigexport.export_channel_metadata import export_channel_metadata
@@ -14,6 +16,7 @@ OptionalPath = Optional[Path]
 OptionalStr = Optional[str]
 
 
+@app.command()
 def main(
     ctx: Context,
     dest: Path = Argument(None),
@@ -220,6 +223,93 @@ def parse_input_dt(dt_string: str) -> datetime:
     return dt
 
 
+@app.command(name="regenerate-html")
+def regenerate_html(
+    chats_dir: Path = Argument(..., help="Path to your signal-chats export directory"),
+    paginate: int = Option(100, "--paginate", "-p", help="Messages per page in HTML; set to 0 for infinite"),
+    verbose: bool = Option(False, "--verbose", "-v"),
+) -> None:
+    """Regenerate index.html files from existing data.json files without re-exporting from Signal."""
+    import json
+    from datetime import datetime as dt
+
+    logging.verbose = verbose
+    chats_dir = chats_dir.expanduser().resolve()
+    secho(f"Scanning: {chats_dir}")
+
+    if paginate <= 0:
+        paginate = int(1e20)
+
+    found = 0
+    errors = 0
+    for data_json in sorted(chats_dir.rglob("data.json")):
+        chat_dir = data_json.parent
+        chat_name = chat_dir.name
+        index_html = chat_dir / "index.html"
+
+        secho(f"  Regenerating: {chat_name}... ", nl=False)
+        try:
+            from sigexport import models as _models
+            messages = []
+            with open(data_json, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    d = json.loads(line)
+
+                    attachments = []
+                    for att in d.get("attachments", []):
+                        if isinstance(att, dict):
+                            raw_path = att.get("path", "")
+                            attachments.append(_models.Attachment(
+                                name=str(att.get("name", "")),
+                                path=Path(str(raw_path)) if raw_path else None,
+                            ))
+                        elif att:
+                            attachments.append(_models.Attachment(
+                                name=str(att),
+                                path=Path(str(att)),
+                            ))
+
+                    reactions = []
+                    for r in d.get("reactions", []):
+                        if isinstance(r, dict):
+                            reactions.append(_models.Reaction(
+                                name=r.get("name", ""),
+                                emoji=r.get("emoji", ""),
+                            ))
+
+                    messages.append(_models.Message(
+                        date=dt.fromisoformat(d["date"]),
+                        sender=d.get("sender", ""),
+                        body=d.get("body", "") or "",
+                        quote=d.get("quote", "") or "",
+                        sticker=d.get("sticker", "") or "",
+                        reactions=reactions,
+                        attachments=attachments,
+                    ))
+
+            if not messages:
+                secho("skipped (no messages)", fg=colors.YELLOW)
+                continue
+
+            ht = html.create_html(name=chat_name, messages=messages, msgs_per_page=paginate)
+            index_html.write_text(ht, encoding="utf-8")
+            html.prep_html(chat_dir)
+            secho(f"done ({len(messages)} messages)", fg=colors.GREEN)
+            found += 1
+
+        except Exception as e:
+            import traceback
+            secho(f"ERROR: {e}", fg=colors.RED)
+            if verbose:
+                traceback.print_exc()
+            errors += 1
+
+    secho(f"\nDone! Regenerated {found} chat(s), {errors} error(s).", fg=colors.GREEN)
+
+
 def cli() -> None:
     """cli."""
-    run(main)
+    app()

@@ -141,7 +141,7 @@ def create_html(
         soup = BeautifulSoup(body, "html.parser")
         # attachments
         for att in msg.attachments:
-            path = att.path
+            path = str(att.path) if att.path else ""
             src = f"./{path}"
             if models.is_image(path):
                 temp = templates.figure.format(src=src, alt=att.name)
