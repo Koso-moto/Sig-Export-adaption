@@ -193,6 +193,83 @@ label > img {
     display: none;
 }
 
+
+/* ════════════════════════════════════════
+   COVER PAGE
+   ════════════════════════════════════════ */
+.cover-page {
+    padding: 20mm 14mm 10mm 14mm;
+    page-break-after: always;
+    break-after: page;
+}
+
+.cover-name {
+    text-align: center;
+    font-size: 2em;
+    font-weight: 700;
+    margin-bottom: 12mm;
+    padding-bottom: 4mm;
+    border-bottom: 2px solid #1b1b1b;
+}
+
+.cover-stats {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10mm;
+    font-size: 0.95em;
+}
+
+.cover-stats th,
+.cover-stats td {
+    text-align: left;
+    padding: 5px 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.cover-stats th {
+    font-weight: 700;
+    background-color: #f0f0f0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.cover-toc-title {
+    font-size: 1.2em;
+    font-weight: 700;
+    margin-bottom: 4mm;
+    padding-bottom: 2mm;
+    border-bottom: 1px solid #ccc;
+}
+
+.cover-toc {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+}
+
+.cover-toc th,
+.cover-toc td {
+    text-align: left;
+    padding: 5px 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.cover-toc th {
+    font-weight: 700;
+    background-color: #f0f0f0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.cover-toc a {
+    color: #3a76f0;
+    text-decoration: none;
+}
+
+.cover-toc a:hover {
+    text-decoration: underline;
+}
+
 /* ════════════════════════════════════════
    PRINT / PDF  —  A4 portrait
    ════════════════════════════════════════ */

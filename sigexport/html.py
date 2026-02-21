@@ -25,6 +25,60 @@ def prep_html(dest: Path) -> None:
         )
 
 
+def create_cover_page(name: str, messages: list[models.Message]) -> str:
+    """Generate a statistics cover page."""
+    from collections import defaultdict
+
+    total_msgs = len(messages)
+    my_msgs = sum(1 for m in messages if m.sender == "Me")
+    their_msgs = total_msgs - my_msgs
+
+    # Count images
+    image_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".avif"}
+    num_images = sum(
+        1 for m in messages for a in m.attachments
+        if a.path and any(str(a.path).lower().endswith(ext) for ext in image_exts)
+    )
+
+    first_msg = messages[0].date if messages else None
+    last_msg = messages[-1].date if messages else None
+
+    # Find last message of each year, track its page number
+    # We need to map year -> last date string for TOC links
+    # Since day-dividers get IDs, collect last date per year
+    year_last_date = {}
+    for m in messages:
+        year = m.date.year
+        year_last_date[year] = m.date.date().isoformat()
+
+    toc_rows = ""
+    for year in sorted(year_last_date.keys()):
+        date_id = "div-" + year_last_date[year]
+        toc_rows += f"<tr><td>{year}</td><td><a href='#{date_id}'>Jump to last message of {year} ({year_last_date[year]})</a></td></tr>\n"
+
+    cover = f"""
+<div class='cover-page'>
+    <h1 class='cover-name'>{name}</h1>
+    <table class='cover-stats'>
+        <tr><th>Stat</th><th>Value</th></tr>
+        <tr><td>Total messages</td><td>{total_msgs}</td></tr>
+        <tr><td>Messages from me</td><td>{my_msgs}</td></tr>
+        <tr><td>Messages from {name}</td><td>{their_msgs}</td></tr>
+        <tr><td>Images shared</td><td>{num_images}</td></tr>
+        <tr><td>First message</td><td>{first_msg.strftime('%Y-%m-%d %H:%M') if first_msg else 'N/A'}</td></tr>
+        <tr><td>Last message</td><td>{last_msg.strftime('%Y-%m-%d %H:%M') if last_msg else 'N/A'}</td></tr>
+    </table>
+    <h2 class='cover-toc-title'>Table of Contents</h2>
+    <table class='cover-toc'>
+        <tr><th>Year</th><th>Link</th></tr>
+        {toc_rows}
+    </table>
+</div>
+<div style='page-break-after: always'></div>
+"""
+    return cover
+
+
 def create_html(
     name: str, messages: list[models.Message], msgs_per_page: int = 100
 ) -> str:
@@ -32,7 +86,7 @@ def create_html(
 
     log(f"\tDoing html for {name}")
     # touch first
-    ht_content = "<div class=\"chat-title\">" + name + "</div>\n"
+    ht_content = create_cover_page(name, messages)
     last_page = int(len(messages) / msgs_per_page)
 
     page_num = 0
@@ -64,7 +118,8 @@ def create_html(
 
         # Insert a day-divider whenever the date changes
         if date != last_date:
-            ht_content += "<div class='day-divider'>" + date + "</div>\n"
+            div_id = "div-" + date
+            ht_content += "<div class='day-divider' id='" + div_id + "'>" + date + "</div>\n"
             last_date = date
 
         reactions = " ".join(f"{r.name}: {r.emoji}" for r in msg.reactions)
