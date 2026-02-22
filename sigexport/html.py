@@ -90,13 +90,18 @@ def prep_media_pdf(chat_dir: Path, max_width: int = 600) -> None:
             shutil.copy2(img_path, dest)
 
 
-def create_cover_page(name: str, messages: list[models.Message]) -> str:
+def create_cover_page(
+    name: str, messages: list[models.Message], for_pdf: bool = False
+) -> str:
     """Generate a statistics cover page with chat summary and year-based TOC."""
+    from collections import Counter
+
     safe_name = html_escape(name)
 
     total_msgs = len(messages)
-    my_msgs = sum(1 for m in messages if m.sender == "Me")
-    their_msgs = total_msgs - my_msgs
+
+    # Count messages per sender
+    sender_counts = Counter(m.sender for m in messages)
 
     num_images = sum(
         1
@@ -108,24 +113,47 @@ def create_cover_page(name: str, messages: list[models.Message]) -> str:
     first_msg = messages[0].date if messages else None
     last_msg = messages[-1].date if messages else None
 
-    # Collect last date per year for TOC links to day-divider anchors
-    year_last_date: dict[int, str] = {}
+    # Collect first date per year for TOC links to day-divider anchors
+    year_first_date: dict[int, str] = {}
     for m in messages:
         year = m.date.year
-        year_last_date[year] = m.date.date().isoformat()
+        if year not in year_first_date:
+            year_first_date[year] = m.date.date().isoformat()
 
     toc_rows = ""
-    for year in sorted(year_last_date):
-        date_id = "div-" + year_last_date[year]
+    for year in sorted(year_first_date):
+        date_id = "div-" + year_first_date[year]
         toc_rows += (
             f"<tr><td>{year}</td>"
             f"<td><a href='#{date_id}'>"
-            f"Jump to last message of {year} ({year_last_date[year]})"
+            f"First message: {year_first_date[year]}"
             f"</a></td></tr>\n"
         )
 
     first_str = first_msg.strftime("%Y-%m-%d %H:%M") if first_msg else "N/A"
     last_str = last_msg.strftime("%Y-%m-%d %H:%M") if last_msg else "N/A"
+
+    # Build sender rows sorted by message count (descending)
+    sender_rows = ""
+    for sender, count in sender_counts.most_common():
+        safe_sender = html_escape(sender)
+        sender_rows += f"<tr><td>{safe_sender}</td><td>{count}</td></tr>\n"
+
+    # In PDF mode, the TOC hyperlinks don't work across merged chunks,
+    # so we replace them with a note pointing to the sidebar bookmarks.
+    if for_pdf:
+        toc_section = (
+            '<h2 class="cover-toc-title">Table of Contents</h2>\n'
+            "<p><em>Use the sidebar bookmarks in your PDF viewer to navigate "
+            "by year and month.</em></p>"
+        )
+    else:
+        toc_section = f"""
+    <h2 class="cover-toc-title">Table of Contents</h2>
+    <table class="cover-toc">
+        <tr><th>Year</th><th>Link</th></tr>
+        {toc_rows}
+    </table>"""
 
     cover = f"""
 <div class="cover-page">
@@ -133,30 +161,54 @@ def create_cover_page(name: str, messages: list[models.Message]) -> str:
     <table class="cover-stats">
         <tr><th>Stat</th><th>Value</th></tr>
         <tr><td>Total messages</td><td>{total_msgs}</td></tr>
-        <tr><td>Messages from me</td><td>{my_msgs}</td></tr>
-        <tr><td>Messages from {safe_name}</td><td>{their_msgs}</td></tr>
         <tr><td>Images shared</td><td>{num_images}</td></tr>
         <tr><td>First message</td><td>{first_str}</td></tr>
         <tr><td>Last message</td><td>{last_str}</td></tr>
     </table>
-    <h2 class="cover-toc-title">Table of Contents</h2>
-    <table class="cover-toc">
-        <tr><th>Year</th><th>Link</th></tr>
-        {toc_rows}
+    <h2 class="cover-toc-title">Messages by Sender</h2>
+    <table class="cover-stats">
+        <tr><th>Sender</th><th>Messages</th></tr>
+        {sender_rows}
     </table>
+    {toc_section}
 </div>
 <div style="page-break-after: always"></div>
 """
     return cover
 
 
+def create_cover_html(name: str, messages: list[models.Message]) -> str:
+    """Create a standalone HTML document containing only the cover page.
+
+    Used by the PDF pipeline to generate a single cover for the entire chat,
+    separate from the per-chunk message HTML files.
+    """
+    cover = create_cover_page(name, messages, for_pdf=True)
+    ht_text = templates.html.format(
+        name=html_escape(name),
+        content=cover,
+    )
+    return ht_text
+
+
 def create_html(
-    name: str, messages: list[models.Message], msgs_per_page: int = 100
+    name: str,
+    messages: list[models.Message],
+    msgs_per_page: int = 100,
+    include_cover: bool = True,
+    for_pdf: bool = False,
 ) -> str:
-    """Create paginated HTML from a list of messages."""
+    """Create paginated HTML from a list of messages.
+
+    Set include_cover=False to omit the statistics cover page (used when
+    generating per-chunk PDFs that will be merged with a shared cover).
+
+    Set for_pdf=True to replace video/audio players with filename references,
+    since media players cannot render in PDFs.
+    """
     log(f"\tDoing html for {name}")
 
-    ht_content = create_cover_page(name, messages)
+    ht_content = create_cover_page(name, messages, for_pdf=for_pdf) if include_cover else ""
     last_page = max(0, (len(messages) - 1) // msgs_per_page) if messages else 0
 
     # Reuse a single Markdown instance (reset between messages)
@@ -186,6 +238,8 @@ def create_html(
             page_num += 1
 
         sender = msg.sender
+        # Normalize to title case for display (Signal often stores ALL CAPS)
+        sender_display = sender.title() if sender != "Me" else sender
         date = msg.date.date().isoformat()
         time = msg.date.time().replace(microsecond=0).isoformat()
 
@@ -222,12 +276,19 @@ def create_html(
         for att in msg.attachments:
             path = str(att.path) if att.path else ""
             src = f"./{path}"
+            filename = Path(path).name if path else att.name
             if models.is_image(path):
                 temp = templates.figure.format(src=src, alt=att.name)
             elif models.is_audio(path):
-                temp = templates.audio.format(src=src)
+                if for_pdf:
+                    temp = templates.attachment_ref.format(filename=filename)
+                else:
+                    temp = templates.audio.format(src=src)
             elif models.is_video(path):
-                temp = templates.video.format(src=src)
+                if for_pdf:
+                    temp = templates.attachment_ref.format(filename=filename)
+                else:
+                    temp = templates.video.format(src=src)
             else:
                 temp = None
             if temp:
@@ -238,7 +299,7 @@ def create_html(
             cl=cl,
             date=date,
             time=time,
-            sender=sender,
+            sender=sender_display,
             quote=quote,
             body=soup,
             reactions=reactions,

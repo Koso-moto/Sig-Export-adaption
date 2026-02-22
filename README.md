@@ -1,113 +1,190 @@
-# signal-export
+# signal-export (Koso-moto adaptation)
+
 [![PyPI version](https://badge.fury.io/py/signal-export.svg)](https://pypi.org/project/signal-export/)
 
-**⚠️ NB:
-Because the latest versions of Signal Desktop protect the database encryption key, so decrypting involves some extra steps.
-Good luck.**
+This is a heavily extended adaptation of [carderne/signal-export](https://github.com/carderne/signal-export). It keeps the original Markdown and HTML export functionality and adds a full **PDF generation pipeline**, a redesigned **chat-bubble HTML renderer**, **cover pages with statistics**, **date-range filtering**, a **`regenerate-html` command**, and more.
 
-Export chats from the [Signal](https://www.signal.org/) [Desktop app](https://www.signal.org/download/) to Markdown and HTML files with attachments. Each chat is exported as an individual .md/.html file and the attachments for each are stored in a separate folder. Attachments are linked from the Markdown files and displayed in the HTML (pictures, videos, voice notes).
+⚠️ **NB:** Because the latest versions of Signal Desktop protect the database encryption key, decrypting involves some extra steps. Good luck.
 
-Currently this seems to be the only way to get chat history out of Signal!
+> **Platform note:** This adaptation has only been tested on **macOS**. If you are on Windows or NixOS, [carderne's original repository](https://github.com/carderne/signal-export) may be a better starting point as it has broader platform support and documentation.
 
-Adapted from [mattsta/signal-backup](https://github.com/mattsta/signal-backup), which I suspect will be hard to get working now.
+Export chats from the [Signal](https://www.signal.org/) [Desktop app](https://www.signal.org/download/) to Markdown, HTML, and PDF files with attachments. Each chat is exported as an individual `.md` / `.html` file and the attachments for each chat are stored in a separate `media/` folder. Attachments are linked from the Markdown files and displayed in the HTML (pictures, videos, voice notes).
+
+---
 
 ## Example
-An export for a group conversation looks as follows:
-```markdown
+
+An export for a group conversation looks as follows in Markdown:
+
+```
 [2019-05-29, 15:04] Me: How is everyone?
 [2019-05-29, 15:10] Aya: We're great!
 [2019-05-29, 15:20] Jim: I'm not.
 ```
 
-Images are attached inline with `![name](path)` while other attachments (voice notes, videos, documents) are included as links like `[name](path)` so a click will take you to the file.
+The HTML output renders messages as **chat bubbles**: your messages appear on the right in blue, others appear on the left in grey, matching the look of a modern messaging app. Images are displayed inline; videos and audio use native browser controls.
 
-This is converted to HTML at the end so it can be opened with any web browser. The stylesheet `.css` is still very basic but I'll get to it sooner or later.
+Each HTML export starts with a **cover page** containing:
+- Total message count (yours vs. theirs)
+- Number of images shared
+- First and last message dates
+- A table of contents with jump links per year
 
-## 🐧 Installation
+---
+
+## 🍎 Installation (macOS)
+
 1. Make sure you have Python installed.
-
 2. Install this package:
+
 ```bash
 pip install signal-export
 
-# ...if you have the "pipx" command available, you're probably better off installing with "pipx install signal-export"
+# or with pipx (recommended):
+pipx install signal-export
 ```
 
-3. Then run the script!
+3. Install the additional packages required for PDF export:
+
+```bash
+pip install pypdf Pillow
+```
+
+4. Install **Google Chrome** or **Chromium** — this is required for PDF generation. The tool will auto-detect it.
+
+5. Then run the script:
+
 ```bash
 sigexport ~/signal-chats
-
-# or for Windows:
-python -m sigexport C:\Temp\SignalExport
 ```
 
-## 🪟 Installation: Windows
-If you need step-by-step instructions on things like enabling WSL2, please see the dedicated [Windows Installation](./INSTALLATION.md) instructions.
-
-## Installation nix/nixOS
-`signal-export` is packaged in nixpkgs, so you can run
-```bash
-nix-shell -I nixpkgs=channel:nixpkgs-unstable --packages signal-export --command 'sigexport ~/signal-chats'
-```
-
-If you get an error message about `secret-tool` not being found, you probably need to install `libsecret-tools` via your Linux package manager. If you get this on NixOS then just add `libsecret` in the previous command
-```bash
-nix-shell -I nixpkgs=channel:nixpkgs-unstable --packages signal-export libsecret --command 'sigexport ~/signal-chats'
-```
+---
 
 ## 🚀 Usage
-Please fully exit your Signal app before proceeding, otherwise you will likely encounter an `I/O disk` error, due to the message database being made read-only, as it was being accessed by the app.
 
-See the full help info:
+> ⚠️ **Fully exit Signal Desktop before running**, otherwise you will likely encounter an `I/O disk` error because the database is locked by the running app.
+
+See the top-level help:
+
 ```bash
 sigexport --help
 ```
 
-Disable pagination on HTML:
+See the full options for the main export command:
+
 ```bash
-sigexport --paginate=0 ~/signal-chats
+sigexport main --help
 ```
 
-List available chats and exit:
+### Main export
+
 ```bash
-sigexport --list-chats
+# Export all chats
+sigexport main ~/signal-chats
+
+# Export only specific chats (by contact or group name)
+sigexport main --chats=Jim,Aya ~/signal-chats
+
+# Filter by date range (ISO-8601 format)
+sigexport main ~/signal-chats --start 2024-01-01 --end 2024-12-31
+
+# Disable HTML pagination (one long page per chat)
+sigexport main --paginate=0 ~/signal-chats
+
+# List available chats and exit
+sigexport main --list-chats
+
+# Merge with a previous export (nothing is overwritten)
+sigexport main ~/signal-chats --old ~/signal-chats-backup
+
+# Skip copying media attachments
+sigexport main --no-attachments ~/signal-chats
+
+# Export chat membership metadata only
+sigexport main --chat-members ~/signal-chats
 ```
 
-Export only the selected chats:
+You can add `--source /path/to/dir/` if the script cannot find your Signal config automatically. On macOS the default location is `~/Library/Application Support/Signal/`. The directory must contain a `sql/db.sqlite` file.
+
+---
+
+## 📄 PDF Export
+
+This adaptation adds a full **PDF generation pipeline** using headless Chrome/Chromium.
+
+### Requirements
+
+- **Google Chrome** or **Chromium** must be installed. The tool auto-detects it on macOS, Linux, and Windows.
+- For large chats: `pip install pypdf` (used to merge chunk PDFs).
+- For correctly-oriented, resized images in PDFs: `pip install Pillow`.
+
+### Generate PDFs
+
 ```bash
-sigexport --chats=Jim,Aya ~/signal-chats
+# Generate a PDF for every chat in your export directory
+sigexport pdf ~/signal-chats
+
+# Generate a PDF for a single chat only
+sigexport pdf ~/signal-chats --chat "Aya"
+
+# Skip images (useful for very image-heavy chats)
+sigexport pdf ~/signal-chats --no-images
+
+# Use a custom output filename
+sigexport pdf ~/signal-chats --output my-export.pdf
 ```
 
-You can add `--source /path/to/source/dir/` if the script doesn't manage to find the Signal config location.
-Default locations per OS are below.
-The directory should contain a folder called `sql` with `db.sqlite` inside it.
-- Linux: `~/.config/Signal/`
-- Linux Flatpak: `~/.var/app/org.signal.Signal/config/Signal`
-- macOS: `~/Library/Application Support/Signal/`
-- Windows: `~/AppData/Roaming/Signal/`
+Each chat gets its own `{ChatName}.pdf` inside its folder. The output is **A4 portrait** format with no browser-injected headers or footers.
 
-You can also use `--old /previously/exported/dir/` to merge the new export with a previous one.
-_Nothing will be overwritten!_
-It will put the combined results in whatever output directory you specified and leave your previos export untouched.
-Exercise is left to the reader to verify that all went well before deleting the previous one.
+**Large chats** (over 5,000 messages) are automatically split into 1,000-message chunks. Each chunk is rendered to a temporary PDF, then all chunks are merged into a single final PDF using `pypdf`.
 
-## Development
+Before rendering, a `media_pdf/` subfolder is generated containing **resized JPEG copies** of images (max 600px wide, EXIF orientation corrected). Chrome uses these instead of the originals for faster and more reliable PDF rendering.
+
+---
+
+## 🔄 Regenerate HTML
+
+If you want to refresh the HTML without re-exporting from Signal (e.g. after updating the CSS or templates):
+
 ```bash
-git clone https://github.com/carderne/signal-export.git
-cd signal-export
-rye sync --no-lock
+# Regenerate HTML for all chats
+sigexport regenerate-html ~/signal-chats
+
+# Regenerate HTML for a single chat only
+sigexport regenerate-html ~/signal-chats --chat "Aya"
 ```
 
-Various dev commands:
-```bash
-rye fmt         # format
-rye lint        # lint
-rye run check   # typecheck
-rye run test    # test
-rye run sig     # run signal-export
+This reads the existing `data.json` files (one message per line) and rewrites the `.html` files in place.
+
+---
+
+## 📁 Output structure
+
+```
+~/signal-chats/
+├── style.css                  ← shared stylesheet (linked by all chats)
+├── Aya/
+│   ├── Aya.html               ← chat-bubble HTML with cover page
+│   ├── Aya.pdf                ← generated PDF (if you ran sigexport pdf)
+│   ├── chat.md                ← plain-text Markdown transcript
+│   ├── data.json              ← JSON export (one message per line)
+│   ├── media/                 ← original attachments
+│   └── media_pdf/             ← resized JPEG copies for PDF rendering
+└── Jim/
+    └── ...
 ```
 
-## Similar things
-- [signal-backup-decode](https://github.com/pajowu/signal-backup-decode) might be easier if you use Android!
-- [signal2html](https://github.com/GjjvdBurg/signal2html) also Android only
-- [sigtop](https://github.com/tbvdm/sigtop)
+---
+
+## 🎨 HTML rendering
+
+- Messages render as **chat bubbles**: blue on the right for you, grey on the left for others.
+- **Day dividers** appear between messages from different days, each with an HTML anchor for TOC navigation.
+- **Quoted/reply blocks** are shown as indented, bordered sections inside the bubble.
+- **Reactions** (emoji + sender name) are displayed inline.
+- Message bodies are rendered from Markdown to HTML.
+- Bare URLs are auto-linked even if not formatted as Markdown links.
+- The stylesheet (`style.css`) is shared across all chats and includes full **print/PDF media queries** for clean A4 output.
+- HTML is paginated (default: 100 messages per page) with PREV/NEXT navigation. Set `--paginate=0` for a single page.
+
+---
