@@ -14,8 +14,8 @@ body {
     margin: 0;
 }
 
-/* ── Navigation buttons: removed ── */
-.first, .last, .next, .prev {
+/* ── Navigation buttons: hidden (pagination via JS anchors) ── */
+nav {
     display: none;
 }
 
@@ -25,7 +25,6 @@ body {
     padding: 8px 12px;
     max-width: 100%;
 }
-
 
 /* ── Day divider ── */
 .day-divider {
@@ -100,12 +99,10 @@ body {
     margin: 0;
 }
 
-/* ── Timestamps: inline after message text ── */
+/* ── Timestamps ── */
 .date {
     display: none;
 }
-
-
 
 .time {
     display: block;
@@ -114,9 +111,6 @@ body {
     text-align: right;
     margin-top: 1px;
     white-space: nowrap;
-    float: none;
-    clear: none;
-    position: static;
 }
 
 .msg.me .time {
@@ -165,13 +159,8 @@ a:hover {
     text-decoration: underline;
 }
 
-/* ── Message spacing ── */
-div {
-    margin-bottom: 2px;
-}
-
 /* ── Images & video ── */
-figure > label > img, video {
+figure > img, video {
     display: block;
     width: auto;
     max-width: 360px;
@@ -181,18 +170,8 @@ figure > label > img, video {
     object-fit: contain;
 }
 
-label > img {
-    cursor: pointer;
-}
-
 .msg:has(figure) {
     max-width: 90%;
-}
-
-/* ── Lightbox modal: hidden ── */
-.modal,
-.modal-state {
-    display: none;
 }
 
 
@@ -274,23 +253,14 @@ label > img {
 
 /* ════════════════════════════════════════
    PRINT / PDF  —  A4 portrait
+   Chromium-only @page margin annotations
    ════════════════════════════════════════ */
-/* ── Chat title header ── */
-.chat-title {
-    text-align: center;
-    font-size: 1.1em;
-    font-weight: 600;
-    padding-bottom: 6px;
-    border-bottom: 1.5px solid #1b1b1b;
-    margin-bottom: 10px;
-}
-
 @media print {
 
     @page {
         size: A4 portrait;
         margin: 10mm 14mm;
-        /* Clear browser-injected header and footer content */
+        /* Clear browser-injected header/footer (Chromium only) */
         @top-left   { content: none; }
         @top-center { content: none; }
         @top-right  { content: none; }
@@ -315,8 +285,7 @@ label > img {
         break-before: page;
     }
 
-    .first, .last, .next, .prev, nav,
-    .modal, .modal-state {
+    nav {
         display: none !important;
     }
 
