@@ -242,7 +242,7 @@ def write_missing_attachments_report(
     password: Optional[str],
     key: Optional[str],
 ) -> None:
-    """Write a report of attachments with no local file to dest/signal_missing_attachments.txt."""
+    """Write a report of attachments with no local file to dest/!signal_missing_attachments.txt."""
     db_file = src / "sql" / "db.sqlite"
 
     if key is None:
@@ -273,7 +273,7 @@ def write_missing_attachments_report(
     rows = c.fetchall()
     db.close()
 
-    out = dest / "signal_missing_attachments.txt"
+    out = dest / "!signal_missing_attachments.txt"
     with open(out, "w", encoding="utf-8") as f:
         f.write(f"Missing Signal attachments (not downloaded) — {len(rows)} total\n")
         f.write("=" * 120 + "\n")

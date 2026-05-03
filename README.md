@@ -160,7 +160,7 @@ This reads the existing `data.json` files (one message per line) and rewrites th
 ```
 ~/signal-chats/
 ├── style.css                          ← shared stylesheet (linked by all chats)
-├── signal_missing_attachments.txt     ← report of attachments not downloaded locally
+├── !signal_missing_attachments.txt    ← report of attachments not downloaded locally
 ├── Aya/
 │   ├── Aya.html               ← chat-bubble HTML with cover page
 │   ├── Aya.pdf                ← generated PDF (if you ran sigexport pdf)
@@ -172,7 +172,7 @@ This reads the existing `data.json` files (one message per line) and rewrites th
     └── ...
 ```
 
-`signal_missing_attachments.txt` lists every attachment recorded in Signal's database that has no local file (never downloaded or since deleted), grouped by conversation with date, file type, and filename. Useful for identifying gaps before archiving.
+`!signal_missing_attachments.txt` lists every attachment recorded in Signal's database that has no local file (never downloaded or since deleted), grouped by conversation with date, file type, and filename. Useful for identifying gaps before archiving.
 
 ---
 
