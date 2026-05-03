@@ -178,7 +178,7 @@ This reads the existing `data.json` files (one message per line) and rewrites th
 
 ## 🎨 HTML rendering
 
-- The HTML is a single long page per chat by default. 
+- HTML output is a single scrollable page per chat.
 - Messages render as **chat bubbles**: blue on the right for you, grey on the left for others.
 - **Day dividers** appear between messages from different days, each with an HTML anchor for TOC navigation.
 - **Quoted/reply blocks** are shown as indented, bordered sections inside the bubble.
@@ -186,6 +186,6 @@ This reads the existing `data.json` files (one message per line) and rewrites th
 - Message bodies are rendered from Markdown to HTML.
 - Bare URLs are auto-linked even if not formatted as Markdown links.
 - The stylesheet (`style.css`) is shared across all chats and includes full **print/PDF media queries** for clean A4 output.
-- HTML output is a single scrollable page per chat.
+
 
 ---
