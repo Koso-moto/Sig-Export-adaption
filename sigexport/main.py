@@ -11,15 +11,7 @@ from typing import Optional
 
 from typer import Argument, Context, Exit, Option, Typer, colors, secho
 
-app = Typer(
-    help=(
-        "sigexport — export Signal chats to markdown, HTML and PDF.\n\n"
-        "To export from Signal database, run:\n\n"
-        "    sigexport ~/outputdir\n\n"
-        "For full export options run:\n\n"
-        "    sigexport --help"
-    )
-)
+app = Typer()
 
 from sigexport import create, data, files, html, logging, merge, models, utils
 from sigexport.export_channel_metadata import export_channel_metadata
@@ -360,19 +352,25 @@ def main(
     _: bool = Option(False, "--version", callback=utils.version_callback),
 ) -> None:
     """
-    Read the Signal directory and output attachments and chat to DEST directory.
+    sigexport — export Signal chats to Markdown, HTML and PDF.
 
-    Example to list chats:
+    \b
+    Main export:
+      sigexport ~/signal-chats
+      sigexport --chats=Jim,Aya ~/signal-chats
+      sigexport ~/signal-chats --start 2025-01-15 --end 2025-03-15
+      sigexport --list-chats
 
-        sigexport --list-chats
+    \b
+    PDF export:
+      sigexport pdf ~/signal-chats
+      sigexport pdf ~/signal-chats --chat 'Aya'
+      sigexport pdf ~/signal-chats --no-images
 
-    Example to export all to a directory:
-
-        sigexport ~/outputdir
-
-    Example to export messages within a specific date range:
-
-        sigexport ~/outputdir --start 2025-01-15T12:30:00+02:00 --end 2025-03-15T12:30:00+02:00
+    \b
+    Regenerate HTML:
+      sigexport regenerate-html ~/signal-chats
+      sigexport regenerate-html ~/signal-chats --chat 'Aya'
     """
     if ctx.invoked_subcommand is not None:
         return
