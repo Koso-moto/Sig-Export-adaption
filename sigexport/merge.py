@@ -1,4 +1,3 @@
-import datetime
 import re
 import shutil
 from pathlib import Path
@@ -19,7 +18,8 @@ def lines_to_msgs(lines: list[str]) -> list[models.MergeMessage]:
             msg = models.MergeMessage(date=date, sender=sender, body=body)
             msgs.append(msg)
         else:
-            msgs[-1].body += li
+            if msgs:
+                msgs[-1].body += li
     return msgs
 
 
@@ -32,25 +32,21 @@ def merge_chat(new: list[models.Message], path_old: Path) -> list[models.Message
     old_msgs = [o.to_message() for o in old]
 
     try:
-        a = old_raw[0][:30]
-        b = old_raw[-1][:30]
-        c = new[0].to_md()[:30]
-        d = new[-1].to_md()[:30]
-        log(f"\t\tFirst line old:\t{a}")
-        log(f"\t\tLast line old:\t{b}")
-        log(f"\t\tFirst line new:\t{c}")
-        log(f"\t\tLast line new:\t{d}")
+        first_old = old_raw[0][:30]
+        last_old = old_raw[-1][:30]
+        first_new = new[0].to_md()[:30]
+        last_new = new[-1].to_md()[:30]
+        log(f"\t\tFirst line old:\t{first_old}")
+        log(f"\t\tLast line old:\t{last_old}")
+        log(f"\t\tFirst line new:\t{first_new}")
+        log(f"\t\tLast line new:\t{last_new}")
     except IndexError:
         log("\t\tNo new messages for this conversation")
 
     # get rid of duplicates
-    msg_dict = {m.comp(): m for m in old_msgs + new}
+    msg_dict = {m.dedup_key(): m for m in old_msgs + new}
     merged = list(msg_dict.values())
-
-    def get_date(val: models.Message) -> datetime.datetime:
-        return val.date
-
-    merged.sort(key=get_date)
+    merged.sort(key=lambda m: m.date)
 
     return merged
 

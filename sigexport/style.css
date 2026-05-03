@@ -14,18 +14,6 @@ body {
     margin: 0;
 }
 
-/* ── Navigation buttons: hidden (pagination via JS anchors) ── */
-nav {
-    display: none;
-}
-
-/* ── Page layout ── */
-.page {
-    display: block;
-    padding: 8px 12px;
-    max-width: 100%;
-}
-
 /* ── Day divider ── */
 .day-divider {
     text-align: center;
@@ -300,15 +288,6 @@ figure > img, video {
         /* Slightly larger for PDF readability */
         font-size: 10pt;
         width: 100%;
-    }
-
-    .page {
-        display: block !important;
-        padding: 0;
-    }
-
-    nav {
-        display: none !important;
     }
 
     .msg {

@@ -115,6 +115,19 @@ def get_attachments_from_db(
     return attachments
 
 
+def _open_signal_db(db_file: Path, key: str) -> dbapi2.Connection:
+    """Open the Signal SQLCipher database and return a ready connection."""
+    db = dbapi2.connect(str(db_file))
+    c = db.cursor()
+    # param binding doesn't work for pragmas, so use direct string concat
+    c.execute(f"PRAGMA KEY = \"x'{key}'\"")
+    c.execute("PRAGMA cipher_page_size = 4096")
+    c.execute("PRAGMA kdf_iter = 64000")
+    c.execute("PRAGMA cipher_hmac_algorithm = HMAC_SHA512")
+    c.execute("PRAGMA cipher_kdf_algorithm = PBKDF2_HMAC_SHA512")
+    return db
+
+
 def copy_attachments(
     src: Path,
     dest: Path,
@@ -136,17 +149,12 @@ def copy_attachments(
             secho(f"Failed to decrypt Signal password: {e}", fg=colors.RED)
             raise Exit(1)
 
-    db = dbapi2.connect(str(db_file))
+    assert key is not None
+    db = _open_signal_db(db_file, key)
     c = db.cursor()
-    # param binding doesn't work for pragmas, so use a direct string concat
-    c.execute(f"PRAGMA KEY = \"x'{key}'\"")
-    c.execute("PRAGMA cipher_page_size = 4096")
-    c.execute("PRAGMA kdf_iter = 64000")
-    c.execute("PRAGMA cipher_hmac_algorithm = HMAC_SHA512")
-    c.execute("PRAGMA cipher_kdf_algorithm = PBKDF2_HMAC_SHA512")
     c.execute("PRAGMA user_version")
-    for row in c:
-        db_version = row[0]
+    row = c.fetchone()
+    db_version = row[0] if row else None
 
     for key, messages in convos.items():
         name = contacts[key].name
@@ -174,13 +182,13 @@ def copy_attachments(
                 for i, att in enumerate(attachments):
                     # Account for no fileName key
                     file_name = str(att["fileName"]) if "fileName" in att else "None"
-                    # Limit file_name to 200 characters to account for 255-character file name limit on most platforms
-                    overlength = len(file_name) > 200
-                    if overlength:
+                    # Limit to 200 chars to stay within the 255-char filename limit on most platforms
+                    filename_too_long = len(file_name) > 200
+                    if filename_too_long:
                         file_name = file_name[:200]
 
-                    # Sometimes the key is there but it is None, needs extension
-                    if "." not in file_name or overlength:
+                    # Filename has no extension or was truncated — derive one from contentType
+                    if "." not in file_name or filename_too_long:
                         content_type = att.get("contentType", "").split("/")
                         if len(content_type) > 1:
                             ext = content_type[1]
@@ -244,12 +252,9 @@ def write_missing_attachments_report(
             secho(f"Failed to get DB key for missing-attachments report: {e}", fg=colors.RED)
             return
 
-    db = dbapi2.connect(str(db_file))
+    assert key is not None
+    db = _open_signal_db(db_file, key)
     c = db.cursor()
-    c.execute(f"PRAGMA KEY = \"x'{key}'\"")
-    c.execute("PRAGMA cipher_page_size = 4096")
-    c.execute("PRAGMA kdf_iter = 64000")
-    c.execute("PRAGMA cipher_hmac_algorithm = HMAC_SHA512")
 
     c.execute("""
         SELECT

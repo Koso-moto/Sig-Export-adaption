@@ -111,5 +111,3 @@ def create_chats(
     return res
 
 
-# def create_member_lists(contacts: models.Contacts) -> str:
-#

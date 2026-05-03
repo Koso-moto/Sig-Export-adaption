@@ -8,7 +8,7 @@ from typing import Optional
 from sqlcipher3 import dbapi2
 from typer import Exit, colors, secho
 
-from sigexport import crypto, models
+from sigexport import crypto, files, models
 from sigexport.logging import log
 
 
@@ -42,14 +42,9 @@ def fetch_data(
     convos: models.Convos = {}
     chats_list = chats.split(",") if len(chats) > 0 else []
 
-    db = dbapi2.connect(str(db_file))
+    assert key is not None
+    db = files._open_signal_db(db_file, key)
     c = db.cursor()
-    # param binding doesn't work for pragmas, so use a direct string concat
-    c.execute(f"PRAGMA KEY = \"x'{key}'\"")
-    c.execute("PRAGMA cipher_page_size = 4096")
-    c.execute("PRAGMA kdf_iter = 64000")
-    c.execute("PRAGMA cipher_hmac_algorithm = HMAC_SHA512")
-    c.execute("PRAGMA cipher_kdf_algorithm = PBKDF2_HMAC_SHA512")
 
     query = "SELECT type, id, serviceId, e164, name, profileName, members FROM conversations"
     c.execute(query)
@@ -115,7 +110,7 @@ def fetch_data(
     for result in c:
         cid = result[0]
         _type = result[1]
-        jsonLoaded = json.loads(result[2])
+        message_json = json.loads(result[2])
         if cid and cid in convos:
             if _type in ["keychange", "profile-change", None]:
                 continue
@@ -132,13 +127,13 @@ def fetch_data(
                 sent_at=result[7],
                 server_timestamp=result[8],
                 has_attachments=result[9],
-                attachments=jsonLoaded.get("attachments", []),
+                attachments=message_json.get("attachments", []),
                 read_status=result[10],
                 seen_status=result[11],
-                call_history=jsonLoaded.get("call_history"),
-                reactions=jsonLoaded.get("reactions", []),
-                sticker=jsonLoaded.get("sticker"),
-                quote=jsonLoaded.get("quote"),
+                call_history=message_json.get("call_history"),
+                reactions=message_json.get("reactions", []),
+                sticker=message_json.get("sticker"),
+                quote=message_json.get("quote"),
             )
 
             convos[cid].append(con)

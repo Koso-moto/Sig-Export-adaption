@@ -1,6 +1,5 @@
 import re
 import shutil
-import sys
 from html import escape as html_escape
 from pathlib import Path
 
@@ -14,12 +13,8 @@ from sigexport.logging import log
 # Shared constants
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".avif"}
 
-# Pre-compiled regexes (avoid recompiling per message / per call)
-_URL_RE = re.compile(r"(https?://\S+)")
 _INDENT_RE = re.compile(r"^(\s*)", re.MULTILINE)
 
-# Sentinel for disabling pagination
-NO_PAGINATION = sys.maxsize
 
 
 def prep_html(dest: Path) -> None:
@@ -84,7 +79,7 @@ def prep_media_pdf(chat_dir: Path, max_width: int = 600) -> None:
                 if img.width > max_width:
                     ratio = max_width / img.width
                     new_size = (max_width, int(img.height * ratio))
-                    img = img.resize(new_size, PilImage.LANCZOS)
+                    img = img.resize(new_size, PilImage.Resampling.LANCZOS)
                 img.convert("RGB").save(dest, "JPEG", quality=85)
         except Exception:
             shutil.copy2(img_path, dest)
@@ -194,11 +189,10 @@ def create_cover_html(name: str, messages: list[models.Message]) -> str:
 def create_html(
     name: str,
     messages: list[models.Message],
-    msgs_per_page: int = 100,
     include_cover: bool = True,
     for_pdf: bool = False,
 ) -> str:
-    """Create paginated HTML from a list of messages.
+    """Create HTML from a list of messages.
 
     Set include_cover=False to omit the statistics cover page (used when
     generating per-chunk PDFs that will be merged with a shared cover).
@@ -209,34 +203,12 @@ def create_html(
     log(f"\tDoing html for {name}")
 
     ht_content = create_cover_page(name, messages, for_pdf=for_pdf) if include_cover else ""
-    last_page = max(0, (len(messages) - 1) // msgs_per_page) if messages else 0
 
     # Reuse a single Markdown instance (reset between messages)
     md = markdown.Markdown()
 
-    page_num = 0
     last_date = None
-    for i, msg in enumerate(messages):
-        if i % msgs_per_page == 0:
-            nav = "\n"
-            if i > 0:
-                nav += "</div>"
-            nav += f'<div class="page" id="pg{page_num}">'
-            nav += "<nav>"
-            nav += '<div class="prev">'
-            if page_num != 0:
-                nav += f'<a href="#pg{page_num - 1}">PREV</a>'
-            else:
-                nav += "PREV"
-            nav += '</div><div class="next">'
-            if page_num != last_page:
-                nav += f'<a href="#pg{page_num + 1}">NEXT</a>'
-            else:
-                nav += "NEXT"
-            nav += "</div></nav>\n"
-            ht_content += nav
-            page_num += 1
-
+    for msg in messages:
         sender = msg.sender
         # Normalize to title case for display (Signal often stores ALL CAPS)
         sender_display = sender.title() if sender != "Me" else sender
@@ -278,21 +250,21 @@ def create_html(
             src = f"./{path}"
             filename = Path(path).name if path else att.name
             if models.is_image(path):
-                temp = templates.figure.format(src=src, alt=att.name)
+                attachment_html = templates.figure.format(src=src, alt=att.name)
             elif models.is_audio(path):
                 if for_pdf:
-                    temp = templates.attachment_ref.format(filename=filename)
+                    attachment_html = templates.attachment_ref.format(filename=filename)
                 else:
-                    temp = templates.audio.format(src=src)
+                    attachment_html = templates.audio.format(src=src)
             elif models.is_video(path):
                 if for_pdf:
-                    temp = templates.attachment_ref.format(filename=filename)
+                    attachment_html = templates.attachment_ref.format(filename=filename)
                 else:
-                    temp = templates.video.format(src=src)
+                    attachment_html = templates.video.format(src=src)
             else:
-                temp = None
-            if temp:
-                soup.append(BeautifulSoup(temp, "html.parser"))
+                attachment_html = None
+            if attachment_html:
+                soup.append(BeautifulSoup(attachment_html, "html.parser"))
 
         cl = "msg me" if sender == "Me" else "msg"
         ht_content += templates.message.format(
@@ -304,10 +276,6 @@ def create_html(
             body=soup,
             reactions=reactions,
         )
-
-    # Close the last page div
-    if messages:
-        ht_content += "</div>"
 
     ht_text = templates.html.format(
         name=html_escape(name),
