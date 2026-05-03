@@ -159,7 +159,6 @@ This reads the existing `data.json` files (one message per line) and rewrites th
 
 ```
 ~/signal-chats/
-├── style.css                          ← shared stylesheet (linked by all chats)
 ├── !signal_missing_attachments.txt    ← report of attachments not downloaded locally
 ├── Aya/
 │   ├── Aya.html               ← chat-bubble HTML with cover page
@@ -185,7 +184,7 @@ This reads the existing `data.json` files (one message per line) and rewrites th
 - **Reactions** (emoji + sender name) are displayed inline.
 - Message bodies are rendered from Markdown to HTML.
 - Bare URLs are auto-linked even if not formatted as Markdown links.
-- The stylesheet (`style.css`) is shared across all chats and includes full **print/PDF media queries** for clean A4 output.
+- The stylesheet is inlined into each HTML file, making every `.html` fully self-contained (works in Safari on iPhone via iCloud Drive). It includes full **print/PDF media queries** for clean A4 output.
 
 
 ---
