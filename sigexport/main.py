@@ -792,6 +792,7 @@ def _generate_one_pdf(
 def cli() -> None:
     """Entry point: route legacy calls to main, otherwise use the Typer app."""
     known_subcommands = {
+        "main",
         "regenerate-html",
         "pdf",
         "--help",
