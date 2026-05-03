@@ -277,9 +277,11 @@ def create_html(
             reactions=reactions,
         )
 
+    css = (Path(__file__).resolve().parent / "style.css").read_text(encoding="utf-8")
     ht_text = templates.html.format(
         name=html_escape(name),
         content=ht_content,
+        css=css,
     )
     ht_text = BeautifulSoup(ht_text, "html.parser").prettify()
     ht_text = _INDENT_RE.sub(r"\1\1\1\1", ht_text)

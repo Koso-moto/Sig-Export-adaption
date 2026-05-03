@@ -16,11 +16,10 @@ html = """
 <head>
     <meta charset="utf-8">
     <title>{name}</title>
-    <link rel="stylesheet" href="../style.css">
+    <style>{css}</style>
 </head>
 <body>
     {content}
-    <script>if (!document.location.hash) document.location.hash = 'pg0'</script>
 </body>
 </html>
 """
