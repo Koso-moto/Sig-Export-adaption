@@ -3,13 +3,14 @@
 import json
 import shutil
 import subprocess
+import sys
 import traceback
 from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from typer import Argument, Context, Exit, Option, Typer, colors, secho
+from typer import Argument, Context, Exit, Option, Typer, colors, run, secho
 
 app = Typer()
 
@@ -287,7 +288,6 @@ def _add_toc_links(
 # ──────────────────────────────────────────────────────────────────────
 
 
-@app.callback(invoke_without_command=True)
 def main(
     ctx: Context,
     dest: Path = Argument(None),
@@ -362,9 +362,6 @@ def main(
       sigexport pdf ~/signal-chats                          generate PDFs
       sigexport regenerate-html ~/signal-chats              refresh HTML files
     """
-    if ctx.invoked_subcommand is not None:
-        return
-
     logging.verbose = verbose
 
     if not any((dest, list_chats)):
@@ -509,7 +506,13 @@ def regenerate_html(
     ),
     verbose: bool = Option(False, "--verbose", "-v"),
 ) -> None:
-    """Regenerate {name}.html files from existing data.json files without re-exporting from Signal."""
+    """
+    Regenerate HTML files from existing data.json exports without re-exporting from Signal.
+
+    \b
+      sigexport regenerate-html ~/signal-chats              all chats
+      sigexport regenerate-html ~/signal-chats --chat Aya   single chat
+    """
     logging.verbose = verbose
     chats_dir = chats_dir.expanduser().resolve()
 
@@ -583,7 +586,15 @@ def generate_pdf(
     ),
     verbose: bool = Option(False, "--verbose", "-v"),
 ) -> None:
-    """Generate a PDF report.pdf in each chat folder using headless Chrome."""
+    """
+    Generate a PDF for each chat using headless Chrome. Requires Google Chrome or Chromium.
+
+    \b
+      sigexport pdf ~/signal-chats                          all chats
+      sigexport pdf ~/signal-chats --chat Aya               single chat
+      sigexport pdf ~/signal-chats --no-images              skip images
+      sigexport pdf ~/signal-chats --output archive.pdf     custom filename
+    """
     chrome_bin = _find_chrome()
     if not chrome_bin:
         secho(
@@ -777,4 +788,8 @@ def _generate_one_pdf(
 
 def cli() -> None:
     """Entry point."""
-    app()
+    args = sys.argv[1:]
+    if args and args[0] in {"pdf", "regenerate-html"}:
+        app()
+    else:
+        run(main)
