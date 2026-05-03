@@ -17,29 +17,6 @@ _INDENT_RE = re.compile(r"^(\s*)", re.MULTILINE)
 
 
 
-def prep_html(dest: Path) -> None:
-    """Copy style.css to the root export directory.
-
-    dest can be either the root export dir (main export) or a chat subfolder
-    (regenerate-html).  We always copy to the root export dir so all chats
-    share one style.css via ../style.css.
-    """
-    root = Path(__file__).resolve().parents[0]
-    css_source = root / "style.css"
-    # If dest contains data.json it's a chat folder, so go up one level
-    # Otherwise dest is already the root export directory
-    if (dest / "data.json").exists():
-        css_dest = dest.parent / "style.css"
-    else:
-        css_dest = dest / "style.css"
-    if css_source.is_file():
-        shutil.copy2(css_source, css_dest)
-    else:
-        secho(
-            f"Stylesheet ({css_source}) not found. "
-            f"You might want to install one manually at {css_dest}."
-        )
-
 
 def prep_media_pdf(chat_dir: Path, max_width: int = 600) -> None:
     """Pre-generate a media_pdf/ folder with resized images for fast PDF export.

@@ -449,9 +449,6 @@ def main(
         secho("No existing files will be deleted or overwritten!")
         chat_dict = merge.merge_with_old(chat_dict, contacts, dest, Path(old))
 
-    if html_output:
-        html.prep_html(dest)
-
     for contact_id, messages in chat_dict.items():
         name = contacts[contact_id].name or "None"
 
@@ -559,7 +556,6 @@ def regenerate_html(
                 name=chat_name, messages=messages
             )
             index_html.write_text(ht, encoding="utf-8")
-            html.prep_html(chat_dir)
             html.prep_media_pdf(chat_dir)
             secho(f"done ({len(messages)} messages)", fg=colors.GREEN)
             found += 1
