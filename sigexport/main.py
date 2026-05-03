@@ -356,21 +356,21 @@ def main(
 
     \b
     Main export:
-      sigexport ~/signal-chats
-      sigexport --chats=Jim,Aya ~/signal-chats
-      sigexport ~/signal-chats --start 2025-01-15 --end 2025-03-15
+      sigexport ~/outputdir
+      sigexport --chats=Jim,Aya ~/outputdir
+      sigexport ~/outputdir --start 2025-01-15 --end 2025-03-15
       sigexport --list-chats
 
     \b
     PDF export:
-      sigexport pdf ~/signal-chats
-      sigexport pdf ~/signal-chats --chat 'Aya'
-      sigexport pdf ~/signal-chats --no-images
+      sigexport pdf ~/outputdir
+      sigexport pdf ~/outputdir --chat 'Aya'
+      sigexport pdf ~/outputdir --no-images
 
     \b
     Regenerate HTML:
-      sigexport regenerate-html ~/signal-chats
-      sigexport regenerate-html ~/signal-chats --chat 'Aya'
+      sigexport regenerate-html ~/outputdir
+      sigexport regenerate-html ~/outputdir --chat 'Aya'
     """
     if ctx.invoked_subcommand is not None:
         return
@@ -509,7 +509,7 @@ def parse_input_dt(dt_string: str) -> datetime:
 @app.command(name="regenerate-html")
 def regenerate_html(
     chats_dir: Path = Argument(
-        ..., help="Path to your signal-chats export directory"
+        ..., help="Path to your export directory"
     ),
     chat: str = Option(
         "",
@@ -572,7 +572,7 @@ def regenerate_html(
 @app.command(name="pdf")
 def generate_pdf(
     chats_dir: Path = Argument(
-        ..., help="Path to your signal-chats export directory"
+        ..., help="Path to your export directory"
     ),
     chat: str = Option(
         "",
