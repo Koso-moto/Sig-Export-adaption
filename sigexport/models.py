@@ -62,31 +62,20 @@ Convos = dict[str, list[RawMessage]]
 Reaction = namedtuple("Reaction", ["name", "emoji"])
 
 
+def _has_extension(p: str, extensions: set[str]) -> bool:
+    return Path(p).suffix.lower().lstrip(".") in extensions
+
+
 def is_image(p: str) -> bool:
-    suffix = p.split(".")
-    return len(suffix) > 1 and suffix[-1] in [
-        "png",
-        "jpg",
-        "jpeg",
-        "gif",
-        "tif",
-        "tiff",
-    ]
+    return _has_extension(p, {"png", "jpg", "jpeg", "gif", "tif", "tiff"})
 
 
 def is_audio(p: str) -> bool:
-    suffix = p.split(".")
-    return len(suffix) > 1 and suffix[-1] in [
-        "m4a",
-        "aac",
-    ]
+    return _has_extension(p, {"m4a", "aac"})
 
 
 def is_video(p: str) -> bool:
-    suffix = p.split(".")
-    return len(suffix) > 1 and suffix[-1] in [
-        "mp4",
-    ]
+    return _has_extension(p, {"mp4"})
 
 
 @dataclass
@@ -123,7 +112,8 @@ class Message:
 
         return f"[{date_str}] {self.sender}: {self.quote}{body}\n"
 
-    def comp(self: Message) -> tuple[datetime, str, str]:
+    def dedup_key(self: Message) -> tuple[datetime, str, str]:
+        """Key used to detect duplicate messages when merging exports."""
         date = self.date.replace(second=0, microsecond=0)
         return (date, self.sender, self.body.replace("\n", "").replace(">", "").strip())
 

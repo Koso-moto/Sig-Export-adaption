@@ -8,8 +8,58 @@ from typing import Optional
 from sqlcipher3 import dbapi2
 from typer import Exit, colors, secho
 
-from sigexport import crypto, models
+from sigexport import crypto, files, models
 from sigexport.logging import log
+
+
+def _call_history(
+    message_json: dict, call_directions: dict[str, dict]
+) -> dict | None:
+    """Build a call_history dict by combining legacy JSON and callsHistory data."""
+    legacy = message_json.get("call_history") or message_json.get("callHistoryDetails")
+    call_row = None
+
+    call_id = message_json.get("callId")
+    if call_id is not None:
+        call_row = call_directions.get(str(call_id))
+
+    # Merge when both are available so modern direction/status from callsHistory wins
+    if isinstance(legacy, dict) and isinstance(call_row, dict):
+        return {**legacy, **call_row}
+    if isinstance(call_row, dict):
+        return call_row
+    if isinstance(legacy, dict):
+        return legacy
+
+    return None
+
+
+def _load_call_directions(db: dbapi2.Connection) -> dict[str, dict]:
+    """Load call info from callsHistory table (if present in this Signal schema)."""
+    call_directions: dict[str, dict] = {}
+    try:
+        c2 = db.cursor()
+        c2.execute("SELECT callId, direction, status, type, timestamp, endedTimestamp FROM callsHistory")
+        for row in c2.fetchall():
+            call_directions[str(row[0])] = {
+                "direction": row[1],
+                "status": row[2],
+                "callType": row[3],
+                "timestamp": row[4],
+                "endedTimestamp": row[5],
+            }
+    except dbapi2.OperationalError as e:
+        err = str(e).lower()
+        if "no such table" in err and "callshistory" in err:
+            log("\tcallsHistory table not found; using legacy call metadata only")
+        else:
+            secho(f"Failed to query callsHistory table: {e}", fg=colors.RED)
+            raise Exit(1) from e
+    except Exception as e:
+        secho(f"Unexpected error while querying callsHistory table: {e}", fg=colors.RED)
+        raise Exit(1) from e
+
+    return call_directions
 
 
 def fetch_data(
@@ -42,14 +92,11 @@ def fetch_data(
     convos: models.Convos = {}
     chats_list = chats.split(",") if len(chats) > 0 else []
 
-    db = dbapi2.connect(str(db_file))
+    assert key is not None
+    db = files._open_signal_db(db_file, key)
     c = db.cursor()
-    # param binding doesn't work for pragmas, so use a direct string concat
-    c.execute(f"PRAGMA KEY = \"x'{key}'\"")
-    c.execute("PRAGMA cipher_page_size = 4096")
-    c.execute("PRAGMA kdf_iter = 64000")
-    c.execute("PRAGMA cipher_hmac_algorithm = HMAC_SHA512")
-    c.execute("PRAGMA cipher_kdf_algorithm = PBKDF2_HMAC_SHA512")
+
+    call_directions = _load_call_directions(db)
 
     query = "SELECT type, id, serviceId, e164, name, profileName, members FROM conversations"
     c.execute(query)
@@ -75,6 +122,13 @@ def fetch_data(
         if not chats or (result[4] in chats_list or result[5] in chats_list):
             convos[cid] = []
 
+    # Check which columns exist (older DB schemas may be missing some)
+    c.execute("PRAGMA table_info(messages)")
+    msg_cols = {row[1] for row in c.fetchall()}
+
+    def col(name: str) -> str:
+        return name if name in msg_cols else f"NULL AS {name}"
+
     # Add date range filtering to the query if provided
     where_clause = ""
 
@@ -98,14 +152,14 @@ def fetch_data(
         json,
         id,
         body,
-        sourceServiceId,
-        timestamp,
+        {col("sourceServiceId")},
+        {col("timestamp")},
         sent_at,
-        serverTimestamp,
-        hasAttachments,
-        readStatus,
-        seenStatus,
-        expireTimer
+        {col("serverTimestamp")},
+        {col("hasAttachments")},
+        {col("readStatus")},
+        {col("seenStatus")},
+        {col("expireTimer")}
     FROM messages
     {where_clause}
     ORDER BY sent_at
@@ -115,7 +169,7 @@ def fetch_data(
     for result in c:
         cid = result[0]
         _type = result[1]
-        jsonLoaded = json.loads(result[2])
+        message_json = json.loads(result[2])
         if cid and cid in convos:
             if _type in ["keychange", "profile-change", None]:
                 continue
@@ -132,13 +186,13 @@ def fetch_data(
                 sent_at=result[7],
                 server_timestamp=result[8],
                 has_attachments=result[9],
-                attachments=jsonLoaded.get("attachments", []),
+                attachments=message_json.get("attachments", []),
                 read_status=result[10],
                 seen_status=result[11],
-                call_history=jsonLoaded.get("call_history"),
-                reactions=jsonLoaded.get("reactions", []),
-                sticker=jsonLoaded.get("sticker"),
-                quote=jsonLoaded.get("quote"),
+                call_history=_call_history(message_json, call_directions),
+                reactions=message_json.get("reactions", []),
+                sticker=message_json.get("sticker"),
+                quote=message_json.get("quote"),
             )
 
             convos[cid].append(con)

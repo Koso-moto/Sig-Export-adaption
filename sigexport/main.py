@@ -24,7 +24,7 @@ app = Typer(
 
 from sigexport import create, data, files, html, logging, merge, models, utils
 from sigexport.export_channel_metadata import export_channel_metadata
-from sigexport.html import IMAGE_EXTS, NO_PAGINATION
+from sigexport.html import IMAGE_EXTS
 
 OptionalPath = Optional[Path]
 OptionalStr = Optional[str]
@@ -64,14 +64,14 @@ def load_messages_from_json(data_json: Path) -> list[models.Message]:
                     attachments.append(
                         models.Attachment(
                             name=str(att.get("name", "")),
-                            path=Path(str(raw_path)) if raw_path else Path(""),
+                            path=str(raw_path) if raw_path else "",
                         )
                     )
                 elif att:
                     attachments.append(
                         models.Attachment(
                             name=str(att),
-                            path=Path(str(att)),
+                            path=str(att),
                         )
                     )
 
@@ -99,7 +99,7 @@ def load_messages_from_json(data_json: Path) -> list[models.Message]:
     return messages
 
 
-def _find_chrome() -> str | None:
+def _find_chrome() -> Optional[str]:
     """Detect Chrome/Chromium binary across macOS, Linux, Windows."""
     candidates = [
         # macOS
@@ -310,12 +310,6 @@ def main(
         "--key",
         help="Linux-only. DB key, as found in the old config.json",
     ),
-    paginate: int = Option(
-        100,
-        "--paginate",
-        "-p",
-        help="Messages per page in HTML; set to 0 for infinite",
-    ),
     chats: str = Option(
         "",
         help="Comma-separated chat names to include: contact names or group names",
@@ -439,6 +433,8 @@ def main(
         secho("Copying and renaming attachments")
         files.copy_attachments(source_dir, dest, convos, contacts, password, db_key)
 
+    files.write_missing_attachments_report(source_dir, dest, password, db_key)
+
     if json_output and old:
         secho(
             "Warning: currently, JSON does not support merging with the --old flag",
@@ -452,9 +448,6 @@ def main(
         secho(f"Merging old at {old} into output directory")
         secho("No existing files will be deleted or overwritten!")
         chat_dict = merge.merge_with_old(chat_dict, contacts, dest, Path(old))
-
-    if paginate <= 0:
-        paginate = NO_PAGINATION
 
     if html_output:
         html.prep_html(dest)
@@ -486,7 +479,7 @@ def main(
                     print(msg.dict_str(), file=js_f)
             if ht_f:
                 ht = html.create_html(
-                    name=name, messages=messages, msgs_per_page=paginate
+                    name=name, messages=messages
                 )
                 print(ht, file=ht_f)
 
@@ -527,20 +520,11 @@ def regenerate_html(
         "-c",
         help="Name of a single chat folder to regenerate (leave empty for all)",
     ),
-    paginate: int = Option(
-        100,
-        "--paginate",
-        "-p",
-        help="Messages per page in HTML; set to 0 for infinite",
-    ),
     verbose: bool = Option(False, "--verbose", "-v"),
 ) -> None:
     """Regenerate {name}.html files from existing data.json files without re-exporting from Signal."""
     logging.verbose = verbose
     chats_dir = chats_dir.expanduser().resolve()
-
-    if paginate <= 0:
-        paginate = NO_PAGINATION
 
     if chat:
         chat_path = chats_dir / chat
@@ -572,7 +556,7 @@ def regenerate_html(
                 continue
 
             ht = html.create_html(
-                name=chat_name, messages=messages, msgs_per_page=paginate
+                name=chat_name, messages=messages
             )
             index_html.write_text(ht, encoding="utf-8")
             html.prep_html(chat_dir)
@@ -712,7 +696,6 @@ def _generate_one_pdf(
             ht = html.create_html(
                 name=chat_name,
                 messages=all_messages,
-                msgs_per_page=NO_PAGINATION,
                 for_pdf=True,
             )
             if no_images:
@@ -772,7 +755,6 @@ def _generate_one_pdf(
             ht = html.create_html(
                 name=f"{chat_name} ({label})",
                 messages=chunk,
-                msgs_per_page=NO_PAGINATION,
                 include_cover=False,
                 for_pdf=True,
             )
@@ -810,6 +792,7 @@ def _generate_one_pdf(
 def cli() -> None:
     """Entry point: route legacy calls to main, otherwise use the Typer app."""
     known_subcommands = {
+        "main",
         "regenerate-html",
         "pdf",
         "--help",

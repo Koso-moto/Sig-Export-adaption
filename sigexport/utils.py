@@ -2,7 +2,7 @@ import sys
 from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, TypedDict, Union, cast
+from typing import Any, TypedDict, Union
 
 import emoji
 from typer import Exit, secho
@@ -55,8 +55,7 @@ def parse_datetime(input_str: str) -> datetime:
             return datetime.strptime(input_str, fmt)
         except ValueError as e:
             last_exception = e
-    exception = cast(ValueError, last_exception)
-    raise (exception)
+    raise last_exception  # type: ignore[misc]
 
 
 def version_callback(value: bool) -> None:

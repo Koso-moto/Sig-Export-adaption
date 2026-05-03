@@ -88,9 +88,6 @@ sigexport main --chats=Jim,Aya ~/signal-chats
 # Filter by date range (ISO-8601 format)
 sigexport main ~/signal-chats --start 2024-01-01 --end 2024-12-31
 
-# Disable HTML pagination (one long page per chat)
-sigexport main --paginate=0 ~/signal-chats
-
 # List available chats and exit
 sigexport main --list-chats
 
@@ -162,7 +159,8 @@ This reads the existing `data.json` files (one message per line) and rewrites th
 
 ```
 ~/signal-chats/
-├── style.css                  ← shared stylesheet (linked by all chats)
+├── style.css                          ← shared stylesheet (linked by all chats)
+├── signal_missing_attachments.txt     ← report of attachments not downloaded locally
 ├── Aya/
 │   ├── Aya.html               ← chat-bubble HTML with cover page
 │   ├── Aya.pdf                ← generated PDF (if you ran sigexport pdf)
@@ -174,10 +172,13 @@ This reads the existing `data.json` files (one message per line) and rewrites th
     └── ...
 ```
 
+`signal_missing_attachments.txt` lists every attachment recorded in Signal's database that has no local file (never downloaded or since deleted), grouped by conversation with date, file type, and filename. Useful for identifying gaps before archiving.
+
 ---
 
 ## 🎨 HTML rendering
 
+- HTML output is a single scrollable page per chat.
 - Messages render as **chat bubbles**: blue on the right for you, grey on the left for others.
 - **Day dividers** appear between messages from different days, each with an HTML anchor for TOC navigation.
 - **Quoted/reply blocks** are shown as indented, bordered sections inside the bubble.
@@ -185,6 +186,6 @@ This reads the existing `data.json` files (one message per line) and rewrites th
 - Message bodies are rendered from Markdown to HTML.
 - Bare URLs are auto-linked even if not formatted as Markdown links.
 - The stylesheet (`style.css`) is shared across all chats and includes full **print/PDF media queries** for clean A4 output.
-- HTML is paginated (default: 100 messages per page) with PREV/NEXT navigation. Set `--paginate=0` for a single page.
+
 
 ---
