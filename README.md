@@ -64,41 +64,35 @@ sigexport ~/signal-chats
 
 > ⚠️ **Fully exit Signal Desktop before running**, otherwise you will likely encounter an `I/O disk` error because the database is locked by the running app.
 
-See the top-level help:
+See the full help:
 
 ```bash
 sigexport --help
-```
-
-See the full options for the main export command:
-
-```bash
-sigexport main --help
 ```
 
 ### Main export
 
 ```bash
 # Export all chats
-sigexport main ~/signal-chats
+sigexport ~/signal-chats
 
 # Export only specific chats (by contact or group name)
-sigexport main --chats=Jim,Aya ~/signal-chats
+sigexport --chats=Jim,Aya ~/signal-chats
 
 # Filter by date range (ISO-8601 format)
-sigexport main ~/signal-chats --start 2024-01-01 --end 2024-12-31
+sigexport ~/signal-chats --start 2024-01-01 --end 2024-12-31
 
 # List available chats and exit
-sigexport main --list-chats
+sigexport --list-chats
 
 # Merge with a previous export (nothing is overwritten)
-sigexport main ~/signal-chats --old ~/signal-chats-backup
+sigexport ~/signal-chats --old ~/signal-chats-backup
 
 # Skip copying media attachments
-sigexport main --no-attachments ~/signal-chats
+sigexport --no-attachments ~/signal-chats
 
 # Export chat membership metadata only
-sigexport main --chat-members ~/signal-chats
+sigexport --chat-members ~/signal-chats
 ```
 
 You can add `--source /path/to/dir/` if the script cannot find your Signal config automatically. On macOS the default location is `~/Library/Application Support/Signal/`. The directory must contain a `sql/db.sqlite` file.
@@ -171,7 +165,9 @@ This reads the existing `data.json` files (one message per line) and rewrites th
     └── ...
 ```
 
-`!signal_missing_attachments.txt` lists every attachment recorded in Signal's database that has no local file (never downloaded or since deleted), grouped by conversation with date, file type, and filename. Useful for identifying gaps before archiving.
+`!signal_missing_attachments.txt` lists every attachment recorded in Signal's database that has no local file — either never downloaded or since deleted. Entries are grouped by conversation with date, file type, and filename.
+
+To recover missing files before archiving: open the chat in Signal Desktop → click the contact's name → Media, Links and Files → manually download everything. Signal will then store the files locally and they will be included in the next export.
 
 ---
 

@@ -18,7 +18,7 @@ app = Typer(
         "To export from Signal database, run:\n\n"
         "    sigexport ~/outputdir\n\n"
         "For full export options run:\n\n"
-        "    sigexport main --help"
+        "    sigexport --help"
     )
 )
 
@@ -296,7 +296,6 @@ def _add_toc_links(
 # ──────────────────────────────────────────────────────────────────────
 
 
-@app.command()
 def main(
     ctx: Context,
     dest: Path = Argument(None),
@@ -788,7 +787,6 @@ def _generate_one_pdf(
 def cli() -> None:
     """Entry point: route legacy calls to main, otherwise use the Typer app."""
     known_subcommands = {
-        "main",
         "regenerate-html",
         "pdf",
         "--help",
