@@ -3,14 +3,13 @@
 import json
 import shutil
 import subprocess
-import sys
 import traceback
 from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from typer import Argument, Context, Exit, Option, Typer, colors, run, secho
+from typer import Argument, Context, Exit, Option, Typer, colors, secho
 
 app = Typer(
     help=(
@@ -296,6 +295,7 @@ def _add_toc_links(
 # ──────────────────────────────────────────────────────────────────────
 
 
+@app.callback(invoke_without_command=True)
 def main(
     ctx: Context,
     dest: Path = Argument(None),
@@ -374,6 +374,9 @@ def main(
 
         sigexport ~/outputdir --start 2025-01-15T12:30:00+02:00 --end 2025-03-15T12:30:00+02:00
     """
+    if ctx.invoked_subcommand is not None:
+        return
+
     logging.verbose = verbose
 
     if not any((dest, list_chats)):
@@ -785,13 +788,5 @@ def _generate_one_pdf(
 
 
 def cli() -> None:
-    """Entry point: route legacy calls to main, otherwise use the Typer app."""
-    known_subcommands = {
-        "regenerate-html",
-        "pdf",
-    }
-    args = sys.argv[1:]
-    if args and args[0] not in known_subcommands:
-        run(main)
-    else:
-        app()
+    """Entry point."""
+    app()
