@@ -55,7 +55,7 @@ pip install pypdf Pillow
 5. Then run the script:
 
 ```bash
-sigexport ~/outputdir
+sigexport ~/signal-chats
 ```
 
 ---
@@ -74,25 +74,25 @@ sigexport --help
 
 ```bash
 # Export all chats
-sigexport ~/outputdir
+sigexport ~/signal-chats
 
 # Export only specific chats (by contact or group name)
-sigexport --chats=Jim,Aya ~/outputdir
+sigexport --chats=Jim,Aya ~/signal-chats
 
 # Filter by date range (ISO-8601 format)
-sigexport ~/outputdir --start 2024-01-01 --end 2024-12-31
+sigexport ~/signal-chats --start 2024-01-01 --end 2024-12-31
 
 # List available chats and exit
 sigexport --list-chats
 
 # Merge with a previous export (nothing is overwritten)
-sigexport ~/outputdir --old ~/outputdir-backup
+sigexport ~/signal-chats --old ~/signal-chats-backup
 
 # Skip copying media attachments
-sigexport --no-attachments ~/outputdir
+sigexport --no-attachments ~/signal-chats
 
 # Export chat membership metadata only
-sigexport --chat-members ~/outputdir
+sigexport --chat-members ~/signal-chats
 ```
 
 You can add `--source /path/to/dir/` if the script cannot find your Signal config automatically. On macOS the default location is `~/Library/Application Support/Signal/`. The directory must contain a `sql/db.sqlite` file.
@@ -113,16 +113,16 @@ This adaptation adds a full **PDF generation pipeline** using headless Chrome/Ch
 
 ```bash
 # Generate a PDF for every chat in your export directory
-sigexport pdf ~/outputdir
+sigexport pdf ~/signal-chats
 
 # Generate a PDF for a single chat only
-sigexport pdf ~/outputdir --chat "Aya"
+sigexport pdf ~/signal-chats --chat "Aya"
 
 # Skip images (useful for very image-heavy chats)
-sigexport pdf ~/outputdir --no-images
+sigexport pdf ~/signal-chats --no-images
 
 # Use a custom output filename
-sigexport pdf ~/outputdir --output my-export.pdf
+sigexport pdf ~/signal-chats --output my-export.pdf
 ```
 
 Each chat gets its own `{ChatName}.pdf` inside its folder. The output is **A4 portrait** format with no browser-injected headers or footers.
@@ -139,10 +139,10 @@ If you want to refresh the HTML without re-exporting from Signal (e.g. after upd
 
 ```bash
 # Regenerate HTML for all chats
-sigexport regenerate-html ~/outputdir
+sigexport regenerate-html ~/signal-chats
 
 # Regenerate HTML for a single chat only
-sigexport regenerate-html ~/outputdir --chat "Aya"
+sigexport regenerate-html ~/signal-chats --chat "Aya"
 ```
 
 This reads the existing `data.json` files (one message per line) and rewrites the `.html` files in place.

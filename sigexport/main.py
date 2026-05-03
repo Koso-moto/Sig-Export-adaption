@@ -352,25 +352,15 @@ def main(
     _: bool = Option(False, "--version", callback=utils.version_callback),
 ) -> None:
     """
-    sigexport — export Signal chats to Markdown, HTML and PDF.
+    Export Signal chats to Markdown, HTML and PDF.
 
     \b
-    Main export:
-      sigexport ~/outputdir
-      sigexport --chats=Jim,Aya ~/outputdir
-      sigexport ~/outputdir --start 2025-01-15 --end 2025-03-15
-      sigexport --list-chats
-
-    \b
-    PDF export:
-      sigexport pdf ~/outputdir
-      sigexport pdf ~/outputdir --chat 'Aya'
-      sigexport pdf ~/outputdir --no-images
-
-    \b
-    Regenerate HTML:
-      sigexport regenerate-html ~/outputdir
-      sigexport regenerate-html ~/outputdir --chat 'Aya'
+      sigexport ~/signal-chats                              export all chats
+      sigexport ~/signal-chats --chats=Jim,Aya              export specific chats
+      sigexport ~/signal-chats --start 2025-01-15           filter by date range
+      sigexport --list-chats                                list available chats
+      sigexport pdf ~/signal-chats                          generate PDFs
+      sigexport regenerate-html ~/signal-chats              refresh HTML files
     """
     if ctx.invoked_subcommand is not None:
         return
