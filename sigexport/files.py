@@ -228,6 +228,58 @@ def copy_attachments(
                 msg.attachments = []
 
 
+def write_missing_attachments_report(
+    src: Path,
+    dest: Path,
+    password: Optional[str],
+    key: Optional[str],
+) -> None:
+    """Write a report of attachments with no local file to dest/signal_missing_attachments.txt."""
+    db_file = src / "sql" / "db.sqlite"
+
+    if key is None:
+        try:
+            key = crypto.get_key(src, password)
+        except Exception as e:
+            secho(f"Failed to get DB key for missing-attachments report: {e}", fg=colors.RED)
+            return
+
+    db = dbapi2.connect(str(db_file))
+    c = db.cursor()
+    c.execute(f"PRAGMA KEY = \"x'{key}'\"")
+    c.execute("PRAGMA cipher_page_size = 4096")
+    c.execute("PRAGMA kdf_iter = 64000")
+    c.execute("PRAGMA cipher_hmac_algorithm = HMAC_SHA512")
+
+    c.execute("""
+        SELECT
+            COALESCE(c.name, c.profileName, c.e164, 'Unknown') AS conversation,
+            datetime(m.sent_at / 1000, 'unixepoch') AS sent_at,
+            ma.contentType,
+            COALESCE(ma.fileName, '(no filename)') AS fileName
+        FROM message_attachments ma
+        LEFT JOIN messages m ON ma.messageId = m.id
+        LEFT JOIN conversations c ON m.conversationId = c.id
+        WHERE ma.path IS NULL
+          AND ma.attachmentType = 'attachment'
+        ORDER BY conversation, sent_at
+    """)
+
+    rows = c.fetchall()
+    db.close()
+
+    out = dest / "signal_missing_attachments.txt"
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(f"Missing Signal attachments (not downloaded) — {len(rows)} total\n")
+        f.write("=" * 120 + "\n")
+        f.write(f"{'Conversation':<40} {'Date':<20} {'Type':<30} {'File'}\n")
+        f.write("-" * 120 + "\n")
+        for conv, sent_at, ctype, fname in rows:
+            f.write(f"{str(conv):<40} {str(sent_at):<20} {str(ctype):<30} {fname}\n")
+
+    secho(f"Missing attachments report: {out} ({len(rows)} files)", fg=colors.YELLOW)
+
+
 def merge_attachments(media_new: Path, media_old: Path) -> None:
     """Merge new and old attachments directories."""
     for f in media_old.iterdir():

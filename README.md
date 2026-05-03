@@ -86,6 +86,19 @@ The directory should contain a folder called `sql` with `db.sqlite` inside it.
 - macOS: `~/Library/Application Support/Signal/`
 - Windows: `~/AppData/Roaming/Signal/`
 
+### Output files
+
+Each chat is exported into its own subfolder inside the output directory:
+- `chat.md` — Markdown transcript
+- `data.json` — JSON transcript (unless `--no-json`)
+- `<name>.html` — HTML transcript (unless `--no-html`)
+- `media/` — folder containing all downloaded attachments
+
+In addition, the root of the output directory will always contain:
+- `signal_missing_attachments.txt` — a report of every attachment recorded in Signal's database that has no local file (i.e. was never downloaded or has since been deleted). Listed by conversation, date, file type, and filename. Useful for identifying gaps before archiving.
+
+---
+
 You can also use `--old /previously/exported/dir/` to merge the new export with a previous one.
 _Nothing will be overwritten!_
 It will put the combined results in whatever output directory you specified and leave your previos export untouched.

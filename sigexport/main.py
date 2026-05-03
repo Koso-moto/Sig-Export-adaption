@@ -341,6 +341,8 @@ def main(
         secho("Copying and renaming attachments")
         files.copy_attachments(source_dir, dest, convos, contacts, password, db_key)
 
+    files.write_missing_attachments_report(source_dir, dest, password, db_key)
+
     if json_output and old:
         secho(
             "Warning: currently, JSON does not support merging with the --old flag",
