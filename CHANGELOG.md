@@ -1,59 +1,108 @@
-# Changelog
+# Changelog — Koso-moto adaptation
 
-## [Unreleased] — Koso-moto adaptation
-
-All changes are relative to [carderne/signal-export](https://github.com/carderne/signal-export).
+This documents everything that differs from [carderne/signal-export](https://github.com/carderne/signal-export).
 
 ---
 
-### Bug fixes
+## New features
 
-- **Null sender crash** — Signal sometimes stores messages with no sender name. This caused `html_escape(None)` to crash during HTML generation. Fixed by filtering out null senders in the cover page statistics and normalising them to `"Unknown"` in the message renderer.
+### PDF export (`sigexport pdf ~/signal-chats`)
+A full PDF generation pipeline was added using headless Chrome/Chromium.
 
-- **Null attachment path crash** — Some attachments recorded in Signal's database have no local file (never downloaded or since deleted). These caused a crash when the export tried to copy them. Fixed by skipping them silently and recording them in the missing attachments report instead.
+- Auto-detects Google Chrome or Chromium on macOS, Linux, and Windows
+- Generates one `{ChatName}.pdf` per chat in A4 portrait format, no browser headers or footers
+- Large chats (over 5,000 messages) are automatically split into 1,000-message chunks, each rendered as a temporary PDF, then merged into one final file using `pypdf`
+- Before rendering, a `media_pdf/` subfolder is created containing resized JPEG copies of images (max 600 px wide, EXIF orientation corrected). Chrome uses these instead of the originals for faster and more reliable rendering
+- PDF sidebar bookmarks are added per year and month for navigation
+- Images can be excluded with `--no-images` (useful for very image-heavy chats)
+- Single chat: `--chat Aya`; custom filename: `--output archive.pdf`
 
-- **Subcommand routing** — `sigexport pdf` and `sigexport regenerate-html` were silently broken after a routing refactor. Typer's `@app.callback` with an optional positional argument caused `pdf` to be parsed as the output directory rather than as a subcommand name. Reverted to an explicit `cli()` router that correctly directs subcommands to `app()` and the main export to `run(main)`.
+Requires: Google Chrome or Chromium. Optional: `pip install pypdf Pillow`
 
-- **Missing columns in older Signal databases** — Signal databases from early 2024 and older are missing columns (`timestamp`, `serverTimestamp`, `sourceServiceId`, etc.) that the message query expected. The query now uses `PRAGMA table_info(messages)` to detect available columns and substitutes `NULL AS <colname>` for any that are absent. *(Synced from upstream `aa8c195`.)*
+### Regenerate HTML (`sigexport regenerate-html ~/signal-chats`)
+Re-renders the `.html` files from existing `data.json` exports without re-exporting from Signal. Useful after CSS or template changes. Supports `--chat Aya` to regenerate a single chat.
 
-- **Call direction in exports** — Calls were always described as "Incoming call" or "Outgoing call" regardless of actual direction. Signal now stores richer call metadata in a `callsHistory` table. The export now reads from it and produces accurate descriptions such as *"Incoming voice call (accepted, 2m 30s)"* or *"Missed video call"*. *(Synced from upstream `48ae11a`.)*
+### Cover page with statistics
+Every HTML export starts with a cover page containing:
+- Total message count broken down by sender
+- Number of images shared
+- First and last message dates
+- A table of contents with year-based jump links (HTML) or a note pointing to PDF sidebar bookmarks (PDF)
 
----
+### Missing attachments report (`!signal_missing_attachments.txt`)
+Every export writes `!signal_missing_attachments.txt` to the root of the output folder. It queries Signal's database for every attachment that has a database record but no local file — i.e. files that were never downloaded or have since been deleted. The report lists them by conversation, date, content type, and filename.
 
-### New features
+The `!` prefix ensures the file sorts to the top of the folder alphabetically.
 
-- **Missing attachments report** — Every export now writes `!signal_missing_attachments.txt` to the root of the output folder. It lists every attachment recorded in Signal's database that has no local file, grouped by conversation with date, file type, and filename. The `!` prefix ensures it sorts to the top of the folder alphabetically.
+To recover missing files before archiving: open the chat in Signal Desktop → click the contact's name → *Media, Links and Files* → download everything manually. Then re-run the export.
 
-  To recover missing files before archiving: open the chat in Signal Desktop → click the contact's name → *Media, Links and Files* → download everything manually. Signal will then store the files locally and they will be included in the next export.
-
-- **Self-contained HTML for iOS** — The CSS stylesheet is now inlined into each `.html` file instead of being linked as `../style.css`. iOS Safari blocks loading resources from parent directories when opening local files from iCloud Drive. With inlined CSS, every `.html` file is fully self-contained and renders correctly on iPhone without needing to embed images.
-
----
-
-### Removed
-
-- **`--paginate` option** — Pagination was never functional. The implementation added PREV/NEXT anchor links and `<div class="page">` wrappers, but there was no CSS or JavaScript to actually hide or show individual pages — all messages were always visible in one continuous scroll regardless of the setting. The option, the dead CSS, and the dead script tag have been removed. HTML output is now always a single scrollable page per chat.
-
-- **`sigexport main` subcommand** — The main export command no longer requires a `main` subcommand. Use `sigexport ~/signal-chats` directly, matching upstream behaviour.
-
-- **`style.css` copied to output folder** — The output folder no longer contains a `style.css` file since the stylesheet is now inlined into each HTML file.
-
----
-
-### Code quality
-
-- Extracted repeated SQLCipher PRAGMA setup into `files._open_signal_db()`, eliminating duplication across `copy_attachments()`, `write_missing_attachments_report()`, and `data.fetch_data()`.
-- Simplified `is_image()`, `is_audio()`, `is_video()` in `models.py` into a shared `_has_extension()` helper using `Path.suffix` instead of string splitting.
-- Renamed cryptic variables: `jsonLoaded` → `message_json`, `overlength` → `filename_too_long`, `comp()` → `dedup_key()`.
-- Fixed a potential `IndexError` in `merge.py` when the first line of a Markdown file does not match the expected message format.
-- Removed dead code: commented-out function stubs, unused `_URL_RE` regex, unused `import sys` / `import datetime`.
-- Image resizing now uses `PilImage.Resampling.LANCZOS` (correct Pillow 10+ API).
+### Self-contained HTML for iOS / iCloud Drive
+The CSS stylesheet is inlined into each `.html` file instead of being linked as a separate `../style.css`. iOS Safari blocks loading resources from parent directories when opening local files from the Files app or iCloud Drive. With inlined CSS, every `.html` renders correctly on iPhone without embedding images.
 
 ---
 
-### CLI / help text
+## Changed from upstream
 
-- `sigexport --help` now shows all export options plus the `pdf` and `regenerate-html` subcommands in one view, with usage examples at the top.
-- `sigexport pdf --help` shows PDF-specific options and examples.
-- `sigexport regenerate-html --help` shows its own options and examples.
-- All example paths use `~/signal-chats` consistently, matching upstream.
+### HTML renderer completely redesigned
+The upstream renderer produces plain message lines. This adaptation renders messages as **chat bubbles**:
+- Your messages appear on the right in blue; others appear on the left in grey — matching the look of Signal itself
+- Sender names are shown above each bubble
+- Day dividers appear between messages from different days, each with an HTML anchor for TOC navigation
+- Quoted/reply blocks are shown as indented bordered sections inside the bubble
+- Reactions (emoji + sender name) are displayed inline
+- Voice notes and audio use native browser `<audio>` controls; videos use `<video>` controls. In PDF mode both are replaced with a plain filename reference since media cannot render in PDFs
+- Images are displayed inline at full width inside the bubble
+- Bare URLs are auto-linked even if not formatted as Markdown links
+
+### Pagination removed
+The upstream version offers a `--paginate` option (default: 100 messages per page) that splits the HTML output into pages with PREV/NEXT navigation links. This adaptation removes pagination entirely. Every chat is a single scrollable page, which works better for PDF rendering and for opening on mobile devices.
+
+### CSS completely rewritten
+The upstream stylesheet is minimal. This adaptation uses a purpose-built stylesheet with:
+- Chat bubble layout (blue right / grey left)
+- System font stack for clean rendering on all platforms
+- Day dividers with horizontal rules
+- Cover page table styling
+- Full print/PDF media queries for clean A4 output
+
+### `sigexport` command now acts as both entry point and app
+Upstream: `sigexport ~/signal-chats` runs the export directly.
+This adaptation adds `pdf` and `regenerate-html` as subcommands while keeping `sigexport ~/signal-chats` working as before. The CLI routes to the correct handler based on the first argument.
+
+---
+
+## Bug fixes (relative to upstream at time of fork)
+
+### Null sender crash
+Signal sometimes stores messages with no sender (e.g. system messages). Passing `None` to `html_escape()` or calling `.title()` on it crashed HTML generation. Fixed by filtering null senders in the cover page statistics and falling back to `"Unknown"` in the message renderer.
+
+### Null attachment path crash
+Some attachments recorded in the database have no local file (never downloaded or since deleted). The export tried to copy them, produced a confusing warning ("No file to copy at …/None"), and later crashed. Fixed by detecting null paths early, skipping the copy, and recording the attachment in the missing attachments report instead.
+
+### Attachment `path` type mismatch
+`att.path` was stored as a `PosixPath` object but `models.is_image()`, `is_audio()`, and `is_video()` expected a plain `str`. This caused attachment type detection to silently fail for every attachment, so images were never displayed inline and audio/video players were never inserted. Fixed by converting `att.path` to `str` at the point of creation.
+
+---
+
+## Synced from upstream after fork
+
+### Handle missing columns in older Signal databases (`upstream aa8c195`)
+Signal databases from early 2024 and older are missing columns that the message query assumed were always present (`timestamp`, `serverTimestamp`, `sourceServiceId`, `hasAttachments`, `readStatus`, `seenStatus`, `expireTimer`). The query now uses `PRAGMA table_info(messages)` to detect which columns exist and substitutes `NULL AS <colname>` for any that are absent.
+
+### Accurate call descriptions (`upstream 48ae11a`)
+Signal now stores call direction and status in a separate `callsHistory` table. Previously all calls were described as "Incoming call" or "Outgoing call". After this fix, exports show accurate descriptions such as:
+- *"Incoming voice call (accepted, 2m 30s)"*
+- *"Missed video call"*
+- *"Outgoing call (unanswered)"*
+
+---
+
+## Internal code changes
+
+These do not affect user-visible behaviour but improve maintainability:
+
+- Extracted the repeated 5-line SQLCipher PRAGMA setup into `files._open_signal_db()`, used in `copy_attachments()`, `write_missing_attachments_report()`, and `data.fetch_data()`
+- Simplified `is_image()`, `is_audio()`, `is_video()` in `models.py` to use a shared `_has_extension()` helper with `Path.suffix` instead of string splitting
+- Renamed internal variables for clarity: `jsonLoaded` → `message_json`, `overlength` → `filename_too_long`, `comp()` → `dedup_key()`
+- Fixed a potential `IndexError` in `merge.py` when the first line of a Markdown file does not match the expected message format
+- Updated image resizing to use `PilImage.Resampling.LANCZOS` (correct Pillow 10+ API, replaces deprecated `PilImage.LANCZOS`)
