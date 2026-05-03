@@ -2,11 +2,12 @@
 
 Format variables
 ────────────────
-html:     {name}, {last_page}, {content}
-message:  {cl}, {date}, {time}, {sender}, {quote}, {body}, {reactions}
-figure:   {src}, {alt}
-audio:    {src}
-video:    {src}
+html:           {name}, {content}
+message:        {cl}, {date}, {time}, {sender}, {quote}, {body}, {reactions}
+figure:         {src}, {alt}
+audio:          {src}
+video:          {src}
+attachment_ref: {filename}   (used in PDF instead of video/audio players)
 """
 
 html = """
@@ -51,4 +52,8 @@ video = """
 <video controls>
     <source src="{src}" type="video/mp4">
 </video>
+"""
+
+attachment_ref = """
+<span class="attachment-ref">📎 {filename}</span>
 """

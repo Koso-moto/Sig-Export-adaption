@@ -183,13 +183,111 @@ def _chrome_to_pdf(
 
 
 def _merge_pdfs(pdf_paths: list[Path], output_path: Path) -> None:
-    """Merge multiple PDFs into one using pypdf."""
+    """Merge multiple PDFs into one using pypdf.
+
+    PDFs are merged in the order given (not sorted), so the caller
+    controls the page order (e.g. cover page first, then chunks).
+    """
     from pypdf import PdfWriter
 
     writer = PdfWriter()
-    for pdf_path in sorted(pdf_paths):
+    for pdf_path in pdf_paths:
         writer.append(str(pdf_path))
     with open(output_path, "wb") as f:
+        writer.write(f)
+
+
+def _add_toc_links(
+    pdf_path: Path,
+    messages: list[models.Message],
+) -> None:
+    """Post-process a merged PDF to add sidebar bookmarks by year and month.
+
+    Scans every page for day-divider date strings to find which page each
+    year/month's first message lands on, then adds nested PDF outline entries:
+
+        2021
+            January
+            February
+            ...
+        2022
+            January
+            ...
+    """
+    import calendar
+
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import Fit
+
+    reader = PdfReader(str(pdf_path))
+    num_pages = len(reader.pages)
+    if num_pages < 2:
+        return
+
+    # 1) Collect first date per year and per (year, month) from messages
+    year_first_date: dict[int, str] = {}
+    month_first_date: dict[tuple[int, int], str] = {}
+    for m in messages:
+        year = m.date.year
+        month = m.date.month
+        date_str = m.date.date().isoformat()
+        if year not in year_first_date:
+            year_first_date[year] = date_str
+        if (year, month) not in month_first_date:
+            month_first_date[(year, month)] = date_str
+
+    # 2) Scan pages to find which page contains each first-date string
+    #    Build maps: date_str → first page it appears on
+    date_to_page: dict[str, int] = {}
+    all_dates = set(year_first_date.values()) | set(month_first_date.values())
+    for page_idx in range(num_pages):
+        page_text = reader.pages[page_idx].extract_text() or ""
+        for date_str in list(all_dates):
+            if date_str in page_text and date_str not in date_to_page:
+                date_to_page[date_str] = page_idx
+                all_dates.discard(date_str)
+        if not all_dates:
+            break  # found all dates
+
+    if not date_to_page:
+        return
+
+    # 3) Build the output PDF with nested outline bookmarks
+    writer = PdfWriter()
+    writer.append(reader)
+
+    for year in sorted(year_first_date):
+        date_str = year_first_date[year]
+        page_idx = date_to_page.get(date_str)
+        if page_idx is None:
+            continue
+
+        # Add year bookmark (top level)
+        year_bookmark = writer.add_outline_item(
+            title=str(year),
+            page_number=page_idx,
+            fit=Fit.fit_horizontally(top=None),
+        )
+
+        # Add month bookmarks (nested under year)
+        for month in range(1, 13):
+            key = (year, month)
+            if key not in month_first_date:
+                continue
+            m_date_str = month_first_date[key]
+            m_page_idx = date_to_page.get(m_date_str)
+            if m_page_idx is None:
+                continue
+
+            writer.add_outline_item(
+                title=calendar.month_name[month],
+                page_number=m_page_idx,
+                parent=year_bookmark,
+                fit=Fit.fit_horizontally(top=None),
+            )
+
+    # 4) Write the updated PDF
+    with open(pdf_path, "wb") as f:
         writer.write(f)
 
 
@@ -595,20 +693,50 @@ def _generate_one_pdf(
 
     total_messages = sum(len(v) for v in messages_by_year.values())
 
-    # Small chat or no data.json: convert existing HTML directly
+    # Small chat or no data.json: generate a PDF-optimized HTML and convert
     if total_messages <= _PDF_CHUNK_THRESHOLD or not messages_by_year:
-        if no_images:
-            html_text = index_html.read_text(encoding="utf-8")
-            html_text = html_text.replace("</head>", _HIDE_MEDIA_CSS)
-            tmp_html = index_html.parent / f"{index_html.stem}_noimg_tmp.html"
-            tmp_html.write_text(html_text, encoding="utf-8")
+        if not messages_by_year:
+            # No data.json — fall back to existing HTML as-is
+            if no_images:
+                html_text = index_html.read_text(encoding="utf-8")
+                html_text = html_text.replace("</head>", _HIDE_MEDIA_CSS)
+                tmp_html = index_html.parent / f"{index_html.stem}_noimg_tmp.html"
+                tmp_html.write_text(html_text, encoding="utf-8")
+                success, detail = _chrome_to_pdf(chrome_bin, tmp_html, final_pdf)
+                tmp_html.unlink(missing_ok=True)
+            else:
+                success, detail = _chrome_to_pdf(chrome_bin, index_html, final_pdf)
+        else:
+            # Regenerate HTML with for_pdf=True (video/audio → filename refs)
+            all_messages = [
+                m for _, msgs in sorted(messages_by_year.items()) for m in msgs
+            ]
+            ht = html.create_html(
+                name=chat_name,
+                messages=all_messages,
+                msgs_per_page=NO_PAGINATION,
+                for_pdf=True,
+            )
+            if no_images:
+                ht = ht.replace("</head>", _HIDE_MEDIA_CSS)
+            tmp_html = chat_dir / f"{chat_name}_pdf_tmp.html"
+            tmp_html.write_text(ht, encoding="utf-8")
             success, detail = _chrome_to_pdf(chrome_bin, tmp_html, final_pdf)
             tmp_html.unlink(missing_ok=True)
-        else:
-            success, detail = _chrome_to_pdf(chrome_bin, index_html, final_pdf)
+
+        # Add sidebar bookmarks (year + month)
+        if success and messages_by_year:
+            all_messages_sorted = [
+                m for _, msgs in sorted(messages_by_year.items()) for m in msgs
+            ]
+            try:
+                _add_toc_links(final_pdf, all_messages_sorted)
+            except Exception:
+                pass  # non-fatal
+
         return chat_name, success, detail
 
-    # Large chat: split into chunks, generate one PDF per chunk, then merge
+    # Large chat: generate a cover page PDF, then chunk PDFs, then merge all
     all_messages = [
         m for _, msgs in sorted(messages_by_year.items()) for m in msgs
     ]
@@ -620,6 +748,19 @@ def _generate_one_pdf(
     chunk_pdfs: list[Path] = []
     temp_htmls: list[Path] = []
     try:
+        # 1) Generate a single cover page PDF from all messages
+        cover_html_path = chat_dir / f"{chat_name}_cover_tmp.html"
+        cover_pdf_path = chat_dir / f"{chat_name}_cover_tmp.pdf"
+        temp_htmls.append(cover_html_path)
+        chunk_pdfs.append(cover_pdf_path)
+
+        cover_ht = html.create_cover_html(name=chat_name, messages=all_messages)
+        cover_html_path.write_text(cover_ht, encoding="utf-8")
+        success, detail = _chrome_to_pdf(chrome_bin, cover_html_path, cover_pdf_path)
+        if not success:
+            return chat_name, False, f"cover page: {detail}"
+
+        # 2) Generate one PDF per chunk (without cover pages)
         for idx, chunk in enumerate(chunks):
             chunk_html_path = chat_dir / f"{chat_name}_chunk{idx:03d}_tmp.html"
             chunk_pdf_path = chat_dir / f"{chat_name}_chunk{idx:03d}_tmp.pdf"
@@ -634,6 +775,8 @@ def _generate_one_pdf(
                 name=f"{chat_name} ({label})",
                 messages=chunk,
                 msgs_per_page=NO_PAGINATION,
+                include_cover=False,
+                for_pdf=True,
             )
             if no_images:
                 ht = ht.replace("</head>", _HIDE_MEDIA_CSS)
@@ -649,8 +792,15 @@ def _generate_one_pdf(
                     f"chunk {idx + 1}/{len(chunks)} ({label}): {detail}",
                 )
 
-        # Merge all chunk PDFs into final PDF
+        # 3) Merge cover + all chunks into final PDF
         _merge_pdfs(chunk_pdfs, final_pdf)
+
+        # 4) Add sidebar bookmarks (year + month) to the merged PDF
+        try:
+            _add_toc_links(final_pdf, all_messages)
+        except Exception:
+            pass  # non-fatal: PDF is still valid, just without bookmarks
+
         return chat_name, True, str(final_pdf)
 
     finally:

@@ -10,7 +10,7 @@ body {
     color: #1b1b1b;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 9pt;
-    line-height: 1.35;
+    line-height: 1.4;
     margin: 0;
 }
 
@@ -29,9 +29,10 @@ nav {
 /* ── Day divider ── */
 .day-divider {
     text-align: center;
-    font-size: 0.68em;
-    color: #888;
-    margin: 8px auto 6px;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #5a5a5a;
+    margin: 12px auto 8px;
     position: relative;
 }
 
@@ -41,20 +42,20 @@ nav {
     display: inline-block;
     width: 60px;
     height: 1px;
-    background: #ccc;
+    background: #aaa;
     vertical-align: middle;
-    margin: 0 8px;
+    margin: 0 10px;
 }
 
 /* ── Message bubbles ── */
 .msg {
     position: relative;
     width: fit-content;
-    max-width: 80%;
+    max-width: 88%;
     min-width: 60px;
     border-radius: 10px 10px 10px 2px;
-    padding: 4px 8px 4px 8px;
-    margin-left: 2%;
+    padding: 4px 10px 2px 10px;
+    margin-left: 1%;
     margin-right: auto;
     margin-bottom: 2px;
     background-color: #f0f0f0;
@@ -66,7 +67,7 @@ nav {
 .msg.me {
     border-radius: 10px 10px 2px 10px;
     margin-left: auto;
-    margin-right: 2%;
+    margin-right: 1%;
     background-color: #3a76f0;
     color: #ffffff;
 }
@@ -75,9 +76,9 @@ nav {
 .sender {
     display: block;
     font-weight: 700;
-    font-size: 0.70em;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-size: 0.72em;
+    letter-spacing: 0.02em;
+    /* text-transform removed: html.py now renders title case */
     color: #3a76f0;
     margin-bottom: 1px;
 }
@@ -109,7 +110,7 @@ nav {
     font-size: 0.60em;
     color: rgba(0, 0, 0, 0.32);
     text-align: right;
-    margin-top: 1px;
+    margin-top: 2px;
     white-space: nowrap;
 }
 
@@ -127,7 +128,7 @@ nav {
 /* ── Quoted / reply block ── */
 .quote {
     display: block;
-    margin: 0 0 3px 0;
+    margin: 0 0 2px 0;
     background-color: rgba(0, 0, 0, 0.07);
     border-left: 2px solid #3a76f0;
     border-radius: 3px;
@@ -159,19 +160,40 @@ a:hover {
     text-decoration: underline;
 }
 
-/* ── Images & video ── */
+/* ── Images & media ── */
+figure {
+    margin: 2px 0 0 0;
+    padding: 0;
+}
+
 figure > img, video {
     display: block;
     width: auto;
     max-width: 360px;
     max-height: 300px;
     border-radius: 8px;
-    margin-top: 3px;
+    margin: 0;
     object-fit: contain;
 }
 
 .msg:has(figure) {
-    max-width: 90%;
+    max-width: 92%;
+}
+
+/* ── Video/audio file references (shown in PDF instead of player) ── */
+.attachment-ref {
+    display: inline-block;
+    font-size: 0.82em;
+    color: #666;
+    padding: 2px 6px;
+    margin-top: 2px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.msg.me .attachment-ref {
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.15);
 }
 
 
@@ -186,17 +208,18 @@ figure > img, video {
 
 .cover-name {
     text-align: center;
-    font-size: 2em;
-    font-weight: 700;
-    margin-bottom: 12mm;
+    font-size: 2.6em;
+    font-weight: 800;
+    color: #3a76f0;
+    margin-bottom: 10mm;
     padding-bottom: 4mm;
-    border-bottom: 2px solid #1b1b1b;
+    border-bottom: 3px solid #3a76f0;
 }
 
 .cover-stats {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 10mm;
+    margin-bottom: 8mm;
     font-size: 0.95em;
 }
 
@@ -209,7 +232,8 @@ figure > img, video {
 
 .cover-stats th {
     font-weight: 700;
-    background-color: #f0f0f0;
+    color: #ffffff;
+    background-color: #3a76f0;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
 }
@@ -217,9 +241,10 @@ figure > img, video {
 .cover-toc-title {
     font-size: 1.2em;
     font-weight: 700;
+    color: #3a76f0;
     margin-bottom: 4mm;
     padding-bottom: 2mm;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 2px solid #3a76f0;
 }
 
 .cover-toc {
@@ -237,7 +262,8 @@ figure > img, video {
 
 .cover-toc th {
     font-weight: 700;
-    background-color: #f0f0f0;
+    color: #ffffff;
+    background-color: #3a76f0;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
 }
@@ -259,7 +285,7 @@ figure > img, video {
 
     @page {
         size: A4 portrait;
-        margin: 10mm 14mm;
+        margin: 10mm 12mm;
         /* Clear browser-injected header/footer (Chromium only) */
         @top-left   { content: none; }
         @top-center { content: none; }
@@ -271,7 +297,8 @@ figure > img, video {
 
     html, body {
         background-color: #ffffff;
-        font-size: 8.5pt;
+        /* Slightly larger for PDF readability */
+        font-size: 10pt;
         width: 100%;
     }
 
@@ -280,17 +307,12 @@ figure > img, video {
         padding: 0;
     }
 
-    .page + .page {
-        page-break-before: always;
-        break-before: page;
-    }
-
     nav {
         display: none !important;
     }
 
     .msg {
-        max-width: 80%;
+        max-width: 90%;
         break-inside: avoid;
         page-break-inside: avoid;
         -webkit-print-color-adjust: exact;
@@ -298,7 +320,7 @@ figure > img, video {
     }
 
     .msg:has(figure) {
-        max-width: 90%;
+        max-width: 94%;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
