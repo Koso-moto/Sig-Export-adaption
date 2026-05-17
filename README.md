@@ -4,31 +4,13 @@
 
 This is a heavily extended adaptation of [carderne/signal-export](https://github.com/carderne/signal-export). It keeps the original Markdown and HTML export functionality and adds a full **PDF generation pipeline**, a redesigned **chat-bubble HTML renderer**, **cover pages with statistics**, **date-range filtering**, a **`regenerate-html` command**, and more.
 
-⚠️ **NB:** Because the latest versions of Signal Desktop protect the database encryption key, decrypting involves some extra steps. Good luck.
+⚠️ **NB:** Because the latest versions of Signal Desktop protect the database encryption key, decrypting involves some extra steps.
 
 > **Platform note:** This adaptation has only been tested on **macOS**. If you are on Windows or NixOS, [carderne's original repository](https://github.com/carderne/signal-export) may be a better starting point as it has broader platform support and documentation.
 
 Export chats from the [Signal](https://www.signal.org/) [Desktop app](https://www.signal.org/download/) to Markdown, HTML, and PDF files with attachments. Each chat is exported as an individual `.md` / `.html` file and the attachments for each chat are stored in a separate `media/` folder. Attachments are linked from the Markdown files and displayed in the HTML (pictures, videos, voice notes).
 
 ---
-
-## Example
-
-An export for a group conversation looks as follows in Markdown:
-
-```
-[2019-05-29, 15:04] Me: How is everyone?
-[2019-05-29, 15:10] Aya: We're great!
-[2019-05-29, 15:20] Jim: I'm not.
-```
-
-The HTML output renders messages as **chat bubbles**: your messages appear on the right in blue, others appear on the left in grey, matching the look of a modern messaging app. Images are displayed inline; videos and audio use native browser controls.
-
-Each HTML export starts with a **cover page** containing:
-- Total message count (yours vs. theirs)
-- Number of images shared
-- First and last message dates
-- A table of contents with jump links per year
 
 ---
 
@@ -125,7 +107,9 @@ sigexport pdf ~/signal-chats --no-images
 sigexport pdf ~/signal-chats --output my-export.pdf
 ```
 
-Each chat gets its own `{ChatName}.pdf` inside its folder. The output is **A4 portrait** format with no browser-injected headers or footers.
+Each chat gets its own `{ChatName}.pdf` inside its folder. The output is **A4 portrait** format with no browser-injected headers or footers, suitable for long-term archiving.
+
+The PDF renders images and clickable hyperlinks. It also includes a sidebar table of contents with links to each month where messages were exchanged.
 
 **Large chats** (over 5,000 messages) are automatically split into 1,000-message chunks. Each chunk is rendered to a temporary PDF, then all chunks are merged into a single final PDF using `pypdf`.
 
@@ -180,7 +164,7 @@ To recover missing files before archiving: open the chat in Signal Desktop → c
 - **Reactions** (emoji + sender name) are displayed inline.
 - Message bodies are rendered from Markdown to HTML.
 - Bare URLs are auto-linked even if not formatted as Markdown links.
-- The stylesheet is inlined into each HTML file, making every `.html` fully self-contained (works in Safari on iPhone via iCloud Drive). It includes full **print/PDF media queries** for clean A4 output.
+- The stylesheet is inlined into each HTML file, making every `.html` fully self-contained. This allows the HTML to be opened directly in Safari on iPhone via iCloud Drive — note that videos will not play on a smartphone, but images and text render correctly. It includes full **print/PDF media queries** for clean A4 output.
 
 
 ---
